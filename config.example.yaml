@@ -1,0 +1,42 @@
+# ============================================================
+#  Agente Estudos — Configuração
+#  Copie este arquivo para config.yaml e preencha as chaves.
+# ============================================================
+
+# Provider ativo: anthropic | openai | groq | ollama
+provider: anthropic
+
+# ── Anthropic ────────────────────────────────────────────────
+anthropic:
+  api_key: "sk-ant-api03-..."
+  model: "claude-opus-4-8"           # claude-sonnet-4-6 | claude-haiku-4-5-20251001
+
+# ── OpenAI ───────────────────────────────────────────────────
+openai:
+  api_key: "sk-..."
+  model: "gpt-4o"                    # gpt-4o-mini | gpt-4-turbo
+
+# ── Groq ─────────────────────────────────────────────────────
+groq:
+  api_key: "gsk_..."
+  model: "llama-3.3-70b-versatile"   # mixtral-8x7b-32768 | gemma2-9b-it
+
+# ── Ollama (local) ───────────────────────────────────────────
+ollama:
+  base_url: "http://localhost:11434"
+  model: "llama3.2:latest"           # qwen2.5:14b | mistral | gemma3
+
+# ── Transcrição de Vídeo ─────────────────────────────────────
+# Como transcrever vídeos locais (YouTube usa yt-dlp automaticamente)
+# auto: tenta groq, depois local, depois nenhum
+# groq: usa API Whisper do Groq (rápido, grátis no free tier)
+# local: usa openai-whisper ou faster-whisper instalado localmente
+# none: pula transcrição de arquivos locais
+transcription:
+  provider: auto
+  groq_api_key: ""                   # deixe vazio para usar groq.api_key acima
+  local_model: "base"                # tiny | base | small | medium | large
+
+# ── Busca Web ────────────────────────────────────────────────
+search:
+  max_results: 5                     # resultados por query de pesquisa
