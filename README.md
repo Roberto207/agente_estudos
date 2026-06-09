@@ -1,12 +1,14 @@
 # Agente Estudos
 
-Script Python que gera pastas de estudo completas e estruturadas para o **Obsidian** a partir de um prompt com tema, foco e fontes.
+Sistema agentico Python que gera pastas de estudo completas e estruturadas para o **Obsidian** a partir de um tema, foco e fontes.
 
-Baseado no agente `criar-estudo` do Claude Code — reescrito como script chamável, suportando múltiplos providers de LLM.
+O LLM recebe um conjunto de ferramentas (busca web, download de artigos, transcrição de vídeos, escrita de arquivos) e decide por conta própria como executar a tarefa — sem sequência fixa. Funciona a partir de qualquer terminal, sem dependência de Claude Code ou VSCode.
+
+Suporta Anthropic, OpenAI, Groq e Ollama.
 
 ## O que ele gera
 
-Dado um tema (ex: *Redes Neurais*), o script produz:
+Dado um tema (ex: *Redes Neurais*), o sistema produz:
 
 ```
 ~/obsidian/redes_neurais/
@@ -25,18 +27,19 @@ Dado um tema (ex: *Redes Neurais*), o script produz:
 │   └── artigo_2.md             # Artigo resumido
 └── html/                       # Versão browser (Catppuccin Mocha)
     ├── index.html              # Hub de navegação
-    ├── fundamentos_introducao.html
     └── ...
 ```
 
 ## Providers de LLM suportados
 
-| Provider | Modelos recomendados | Configuração |
+| Provider | Modelos recomendados | Suporte a tool_use |
 |---|---|---|
-| **Anthropic** | claude-opus-4-8, claude-sonnet-4-6 | `ANTHROPIC_API_KEY` |
-| **OpenAI** | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| **Groq** | llama-3.3-70b, mixtral-8x7b | `GROQ_API_KEY` |
-| **Ollama** | llama3.2, qwen2.5, mistral | Ollama local |
+| **Anthropic** | claude-opus-4-8, claude-sonnet-4-6 | Nativo |
+| **OpenAI** | gpt-4o, gpt-4o-mini | Nativo |
+| **Groq** | llama-3.3-70b, mixtral-8x7b | Nativo |
+| **Ollama** | llama3.2, qwen2.5, mistral | Depende do modelo* |
+
+*Se o modelo Ollama não suportar tool_use, use `--mode pipeline`.
 
 ## Instalação
 
@@ -79,6 +82,16 @@ python setup.py
 
 ## Uso
 
+### Modo interativo
+
+```bash
+python main.py --interactive
+# ou simplesmente:
+python main.py
+```
+
+O sistema pergunta tema, foco, didática, pasta e fontes no terminal.
+
 ### Via argumentos
 
 ```bash
@@ -90,14 +103,6 @@ python main.py \
   --fonte "https://youtu.be/iDulhoQ2pro" \
   --fonte "https://arxiv.org/abs/1706.03762" \
   --fonte "https://jalammar.github.io/illustrated-transformer/"
-```
-
-### Modo interativo
-
-```bash
-python main.py --interactive
-# ou simplesmente:
-python main.py
 ```
 
 ### Sem fontes (só LLM + pesquisa web)
@@ -119,6 +124,18 @@ python main.py \
 --fonte       -s   Fonte (repita para múltiplas)
 --config      -c   Caminho alternativo para config.yaml
 --interactive -i   Modo interativo
+--mode        -m   agent (padrão) | pipeline
+```
+
+### Modos de execução
+
+**`--mode agent`** (padrão): loop agentico real. O LLM recebe ferramentas e decide sozinho o que chamar, em que ordem, podendo se adaptar ao conteúdo encontrado.
+
+**`--mode pipeline`**: sequência fixa de 8 fases (legado). Útil quando o modelo não suporta tool_use (ex: alguns modelos Ollama).
+
+```bash
+# Forçar modo pipeline
+python main.py --interactive --mode pipeline
 ```
 
 ## Tipos de fonte aceitos
@@ -160,17 +177,41 @@ agente-estudos/
 ├── .env.example               # Template de .env
 ├── requirements.txt
 └── src/
-    ├── llm.py                 # Cliente LLM unificado
-    ├── pipeline.py            # Orquestrador das 8 fases
+    ├── agent.py               # Loop agentico (modo padrão)
+    ├── llm.py                 # Cliente LLM unificado (chat + tool_use)
+    ├── pipeline.py            # Pipeline legado de 8 fases
     ├── distiller.py           # Processamento de fontes
     ├── tools/
+    │   ├── registry.py        # Definições das ferramentas + executor
+    │   ├── files.py           # Ferramentas de filesystem
     │   ├── web.py             # WebFetch + DuckDuckGo search
     │   └── video.py           # yt-dlp + Whisper
-    └── generators/
-        ├── content.py         # Escrita dos .md via LLM
-        ├── canvas.py          # Canvas Obsidian
-        └── html_gen.py        # HTML Catppuccin Mocha
+    └── generators/            # Usado pelo modo pipeline
+        ├── content.py
+        ├── canvas.py
+        └── html_gen.py
 ```
+
+## Ferramentas disponíveis para o agente
+
+No modo `agent`, o LLM pode chamar:
+
+| Ferramenta | O que faz |
+|---|---|
+| `web_search` | Pesquisa DuckDuckGo (sem API key) |
+| `fetch_url` | Download e extração de texto de URLs |
+| `transcribe_video` | Transcreve YouTube ou vídeo local |
+| `write_file` | Escreve arquivo no filesystem |
+| `read_file` | Lê arquivo existente |
+| `create_directory` | Cria pasta |
+| `list_directory` | Lista conteúdo de pasta |
+
+## Integração VSCode (opcional)
+
+O repositório inclui `.vscode/tasks.json` e `.vscode/launch.json` com atalhos de conveniência. Eles chamam exatamente os mesmos comandos `python main.py` descritos acima — são opcionais e não adicionam nenhum comportamento novo.
+
+- `Ctrl+Shift+B` → roda `python main.py --interactive`
+- `F5` → debug com `python main.py --interactive`
 
 ## Dependências
 

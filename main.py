@@ -72,6 +72,7 @@ def main(
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
     config_path: str = typer.Option("", "--config", "-c", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
+    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado)"),
 ):
     config = _load_config(config_path)
 
@@ -82,7 +83,11 @@ def main(
 
     pasta = str(Path(pasta).expanduser().resolve())
 
-    from src.pipeline import run
+    if mode == "pipeline":
+        from src.pipeline import run
+    else:
+        from src.agent import run
+
     run(
         config=config,
         tema=tema,
