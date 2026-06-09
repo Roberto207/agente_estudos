@@ -16,7 +16,7 @@ Dado um tema (ex: *Redes Neurais*), o sistema produz:
 ├── 1_redes_neurais_fundamentos.canvas
 ├── 2_redes_neurais_avancado.canvas
 ├── fundamentos/
-│   ├── introducao.md
+│   ├── introducao.md           # Cada .md tem 3 níveis: TL;DR / Resumo / Completo
 │   ├── perceptron.md
 │   └── funcoes_ativacao.md
 ├── avancado/
@@ -27,6 +27,8 @@ Dado um tema (ex: *Redes Neurais*), o sistema produz:
 │   └── artigo_2.md             # Artigo resumido
 └── html/                       # Versão browser (Catppuccin Mocha)
     ├── index.html              # Hub de navegação
+    ├── flashcards.html         # Spaced repetition (SM-2)
+    ├── quiz.html               # Quiz de múltipla escolha
     └── ...
 ```
 
@@ -114,6 +116,26 @@ python main.py \
   --pasta ~/obsidian/algoritmos
 ```
 
+### Chat sobre o conteúdo
+
+Depois de gerar uma pasta de estudos, abra um chat interativo sobre o material:
+
+```bash
+# Q&A direto (estilo NotebookLM — cita a fonte de cada resposta)
+python main.py --chat --pasta ~/obsidian/redes_neurais
+
+# Tutor Socrático (nunca dá a resposta direta, faz perguntas)
+python main.py --chat --pasta ~/obsidian/redes_neurais --chat-mode socratico
+```
+
+Dentro do chat, os comandos disponíveis são:
+
+| Comando | Ação |
+|---|---|
+| `/modo` | Alterna entre Q&A e Socrático (limpa histórico) |
+| `/novo` | Limpa o histórico da conversa |
+| `/sair` | Encerra o chat |
+
 ### Opções completas
 
 ```
@@ -122,9 +144,11 @@ python main.py \
 --didatica    -d   Estilo: formal | prático | exemplos do mundo real | matemático
 --pasta       -p   Caminho absoluto da pasta destino
 --fonte       -s   Fonte (repita para múltiplas)
---config      -c   Caminho alternativo para config.yaml
+--config           Caminho alternativo para config.yaml
 --interactive -i   Modo interativo
 --mode        -m   agent (padrão) | pipeline
+--chat        -c   Abre chat sobre pasta existente (não gera conteúdo)
+--chat-mode        qa (padrão) | socratico
 ```
 
 ### Modos de execução
@@ -186,10 +210,13 @@ agente-estudos/
     │   ├── files.py           # Ferramentas de filesystem
     │   ├── web.py             # WebFetch + DuckDuckGo search
     │   └── video.py           # yt-dlp + Whisper
-    └── generators/            # Usado pelo modo pipeline
-        ├── content.py
-        ├── canvas.py
-        └── html_gen.py
+    ├── chat.py                # Chat interativo (QA + Socrático)
+    └── generators/            # Geração de conteúdo (pipeline + pós-processamento)
+        ├── content.py         # Arquivos .md com 3 níveis de profundidade
+        ├── canvas.py          # Canvas Obsidian
+        ├── html_gen.py        # HTML (Catppuccin Mocha) com tabs de profundidade
+        ├── flashcards.py      # Flashcards SM-2 (gerado automaticamente)
+        └── quiz.py            # Quiz MCQ (gerado automaticamente)
 ```
 
 ## Ferramentas disponíveis para o agente
@@ -205,6 +232,40 @@ No modo `agent`, o LLM pode chamar:
 | `read_file` | Lê arquivo existente |
 | `create_directory` | Cria pasta |
 | `list_directory` | Lista conteúdo de pasta |
+
+## Funcionalidades de aprendizado
+
+### Três níveis de profundidade por arquivo
+
+Cada `.md` gerado contém obrigatoriamente três seções:
+
+- **TL;DR** — 2 parágrafos com o essencial (leitura de 2 min)
+- **Resumo (5 min)** — principais pontos com exemplos
+- **Conteúdo Completo** — artigo completo com tabelas, código e exemplos
+
+Na versão HTML, um seletor de tabs (⚡ Rápido / 📖 Médio / 📚 Completo) alterna entre os níveis automaticamente.
+
+### Flashcards com Spaced Repetition
+
+Gerado automaticamente em `html/flashcards.html` após cada execução. Funciona offline, sem dependências externas.
+
+- Algoritmo **SM-2** implementado em JavaScript puro
+- Card flip com animação 3D (CSS)
+- Botões Difícil / Médio / Bom / Fácil ajustam o intervalo de revisão
+- Progresso salvo em `localStorage` do browser
+
+### Quiz de múltipla escolha
+
+Gerado automaticamente em `html/quiz.html`.
+
+- 10–15 questões por pasta de estudos
+- Feedback imediato após cada resposta com explicação
+- Placar final com lista de pontos fracos e links diretos para os MDs de origem
+- Botão "Tentar novamente" para repetir com as mesmas questões
+
+### Chat interativo (Q&A e Tutor Socrático)
+
+Ver seção [Chat sobre o conteúdo](#chat-sobre-o-conteúdo) acima.
 
 ## Integração VSCode (opcional)
 

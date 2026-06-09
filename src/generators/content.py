@@ -16,15 +16,25 @@ Escreva um arquivo .md para um vault Obsidian seguindo EXATAMENTE esta estrutura
 
 ---
 
-## Seção Principal
+## TL;DR
+[2 parágrafos curtos com o ESSENCIAL do conceito — para leitura rápida de 2 minutos]
+
+---
+
+## Resumo (5 min)
+[Principais pontos com exemplos diretos — para revisão em 5 minutos]
+
+---
+
+## Conteúdo Completo
+
+### Seção Principal
 Conteúdo profundo e didático. Inclua:
 - Exemplos práticos (com blocos de código quando aplicável)
 - Tabelas para comparações quando relevante
 - Imagens referenciadas como: ![descrição](url)
 
----
-
-## Seção Seguinte
+### Seção Seguinte
 ...
 
 ---
@@ -40,6 +50,7 @@ REGRAS:
 - "Exemplos do mundo real" = analogias antes da teoria
 - Links Obsidian [[nome]] sem extensão .md
 - Não repita o que já está em outros arquivos — cada arquivo tem foco único
+- Os três níveis (TL;DR, Resumo, Conteúdo Completo) devem ser autossuficientes
 """
 
 

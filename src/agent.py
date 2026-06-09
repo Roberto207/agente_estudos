@@ -38,13 +38,45 @@ Ao finalizar, a pasta destino deve conter:
 - Dois arquivos `.canvas` (fundamentos e avançado) para Obsidian
 - `html/index.html` e HTMLs individuais (Catppuccin Mocha, sem dependências externas)
 
+NOTA: Após sua execução, o sistema gerará automaticamente `html/flashcards.html` e `html/quiz.html`.
+Portanto, no `index.html` e na sidebar de cada HTML, inclua os links:
+  `<a href="flashcards.html">🃏 Flashcards</a>` e `<a href="quiz.html">📝 Quiz</a>`
+
 ## Padrão de Qualidade dos Arquivos .md
 
-Cada arquivo .md deve:
-- Começar com `# Título` e um `> blockquote` de uma linha explicando o escopo
-- Ter seções `## Seção` com conteúdo profundo e didático
-- Incluir tabelas, blocos de código, exemplos práticos quando relevante
-- Terminar com links de navegação: `- Voltar: [[arquivo]]`, `- Próximo: [[arquivo]]`
+Cada arquivo .md DEVE seguir esta estrutura com os três níveis obrigatórios:
+
+```markdown
+# Título do Conceito
+
+> Blockquote de uma linha explicando o escopo.
+
+---
+
+## TL;DR
+[2 parágrafos curtos com o ESSENCIAL — para leitura rápida de 2 minutos]
+
+---
+
+## Resumo (5 min)
+[Principais pontos com exemplos diretos — para revisão em 5 minutos]
+
+---
+
+## Conteúdo Completo
+
+### Seção Principal
+Conteúdo profundo e didático com tabelas, blocos de código e exemplos.
+
+---
+
+- Voltar: [[arquivo_anterior]]
+- Próximo: [[arquivo_seguinte]]
+- Ver também: [[arquivo_relacionado]]
+```
+
+Os três níveis (TL;DR, Resumo, Conteúdo Completo) permitem ao estudante escolher a profundidade.
+O HTML gerado pelo sistema apresentará tabs "⚡ Rápido / 📖 Médio / 📚 Completo" automaticamente.
 
 ## Padrão do Canvas Obsidian
 
@@ -74,8 +106,8 @@ Paleta obrigatória em todos os HTMLs:
 }
 ```
 
-- `index.html`: sidebar com todos os arquivos por subpasta, cards de tópicos, sem dependências externas
-- HTMLs individuais: conversão fiel do .md correspondente com mesma sidebar e footer de navegação
+- `index.html`: sidebar com todos os arquivos por subpasta + links para Flashcards e Quiz, cards de tópicos
+- HTMLs individuais: conversão fiel do .md com mesma sidebar e footer de navegação
 
 ## Processo Recomendado
 
@@ -83,10 +115,10 @@ Paleta obrigatória em todos os HTMLs:
 2. Processe cada fonte fornecida (`transcribe_video` para vídeos, `fetch_url` para artigos/papers, `web_search` para nomes de livros/cursos)
 3. Planeje a estrutura de arquivos com base no conteúdo extraído + tema + foco
 4. Para cada tópico, use `web_search` para pesquisa complementar
-5. Escreva os arquivos .md com `write_file` — conteúdo rico, profundo, didático
+5. Escreva os arquivos .md com `write_file` — conteúdo rico, profundo, com os três níveis (TL;DR / Resumo / Conteúdo Completo)
 6. Crie os canvas files (.canvas são JSON)
 7. Crie o guia_de_estudos.md
-8. Gere todos os HTMLs
+8. Gere todos os HTMLs (incluindo links para flashcards.html e quiz.html)
 
 Processe fontes do mesmo tipo em paralelo quando possível.
 Adapte a profundidade e linguagem à didática solicitada.
@@ -192,6 +224,9 @@ def run(
     console.print(
         f"\n[dim]Total de chamadas de ferramentas: {total_tool_calls} em {iteration} iterações[/dim]"
     )
+
+    _run_postprocessing(llm, pasta)
+
     index_path = os.path.join(pasta, "html", "index.html")
     if Path(index_path).exists():
         console.print(f"\n[bold]Abrir hub:[/bold] [cyan]file://{os.path.abspath(index_path)}[/cyan]")
@@ -229,6 +264,34 @@ def _print_tool_calls(tool_calls: list[dict], iteration: int) -> None:
             f"{k}={str(v)[:60]!r}" for k, v in inputs.items()
         )
         console.print(f"  [cyan]→ {name}[/cyan]({summary})")
+
+
+def _run_postprocessing(llm, pasta: str) -> None:
+    """Gera flashcards e quiz após o loop do agente."""
+    from .generators.flashcards import generate as gen_flashcards
+    from .generators.quiz import generate as gen_quiz
+
+    console.print("\n[bold purple]Pós-processamento[/bold purple]")
+
+    try:
+        with console.status("[yellow]Gerando flashcards (SM-2)...[/yellow]"):
+            fc_path = gen_flashcards(llm, pasta)
+        if fc_path:
+            console.print(f"  [green]✓[/green] Flashcards: {fc_path}")
+        else:
+            console.print("  [dim]Flashcards: sem conteúdo suficiente[/dim]")
+    except Exception as exc:
+        console.print(f"  [dim]Flashcards: falhou ({exc})[/dim]")
+
+    try:
+        with console.status("[yellow]Gerando quiz...[/yellow]"):
+            quiz_path = gen_quiz(llm, pasta)
+        if quiz_path:
+            console.print(f"  [green]✓[/green] Quiz: {quiz_path}")
+        else:
+            console.print("  [dim]Quiz: sem conteúdo suficiente[/dim]")
+    except Exception as exc:
+        console.print(f"  [dim]Quiz: falhou ({exc})[/dim]")
 
 
 class ToolsNotSupportedError(Exception):

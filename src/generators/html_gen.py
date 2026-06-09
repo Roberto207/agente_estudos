@@ -76,6 +76,29 @@ main h2 { color: var(--blue); margin-bottom: 20px; font-size: 1.5rem; }
 .card p { color: var(--subtext); font-size: 0.82rem; line-height: 1.5; }
 .checkpoint { background: var(--surface0); border-left: 3px solid var(--yellow); border-radius: 8px; padding: 14px 18px; margin-top: 32px; color: var(--yellow); font-size: 0.9rem; }
 .topic-intro { color: var(--subtext); margin-bottom: 24px; line-height: 1.6; }
+.tools-row { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+.tool-card { background: var(--surface0); border-radius: 10px; padding: 14px 20px; border-left: 3px solid var(--teal); text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 10px; font-size: 0.9rem; transition: transform .15s; }
+.tool-card:hover { transform: translateY(-2px); border-color: var(--purple); }
+.tool-card .icon { font-size: 1.4rem; }
+.tool-card strong { color: var(--teal); display: block; font-size: 0.95rem; }
+.tool-card span { color: var(--subtext); font-size: 0.8rem; }
+"""
+
+_CSS_DEPTH_TABS = """
+.depth-tabs { margin: 20px 0 0; }
+.depth-tabs input[type=radio] { display: none; }
+.tab-labels { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--surface0); padding-bottom: 0; }
+.tab-labels label { padding: 8px 18px; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.85rem; color: var(--subtext); border: 1px solid transparent; border-bottom: none; transition: background .15s, color .15s; margin-bottom: -1px; }
+.tab-labels label:hover { color: var(--text); background: var(--surface0); }
+#tab-rapido:checked   ~ .tab-labels label[for=tab-rapido],
+#tab-medio:checked    ~ .tab-labels label[for=tab-medio],
+#tab-completo:checked ~ .tab-labels label[for=tab-completo] {
+  color: var(--purple); background: var(--surface0); border-color: var(--surface0); border-bottom-color: var(--surface0);
+}
+.depth-content > div { display: none; }
+#tab-rapido:checked   ~ .depth-content .content-rapido   { display: block; }
+#tab-medio:checked    ~ .depth-content .content-medio    { display: block; }
+#tab-completo:checked ~ .depth-content .content-completo { display: block; }
 """
 
 
@@ -180,12 +203,27 @@ def _render_index(tema: str, foco: str, structure: dict, pages: list[dict], nav_
     <nav>
       <h2>Navegação</h2>
       {nav_html}
+      <div class="section">
+        <div class="section-title">Ferramentas</div>
+        <a href="flashcards.html">🃏 Flashcards</a>
+        <a href="quiz.html">📝 Quiz</a>
+      </div>
     </nav>
     <main>
       <h2>Guia de Estudos</h2>
       <p class="topic-intro">{_esc(foco)}</p>
       <div class="cards">
         {cards}
+      </div>
+      <div class="tools-row">
+        <a class="tool-card" href="flashcards.html">
+          <span class="icon">🃏</span>
+          <div><strong>Flashcards</strong><span>Spaced repetition (SM-2)</span></div>
+        </a>
+        <a class="tool-card" href="quiz.html">
+          <span class="icon">📝</span>
+          <div><strong>Quiz</strong><span>Múltipla escolha com feedback</span></div>
+        </a>
       </div>
       <div class="checkpoint">
         💡 Para começar: abra o arquivo <strong>Guia de Estudos</strong> na barra lateral
@@ -202,19 +240,27 @@ def _render_index(tema: str, foco: str, structure: dict, pages: list[dict], nav_
 
 
 def _render_concept_page(tema: str, title: str, md_content: str, nav_html: str, current_html: str) -> str:
-    article_html = _md_to_html(md_content, current_html)
     active_nav = re.sub(
         rf'(href="{re.escape(current_html)}")',
         r'\1 class="active"',
         nav_html,
     )
+
+    depth_sections = _split_depth_sections(md_content)
+    if depth_sections:
+        article_html = _render_depth_tabs(depth_sections, current_html)
+        extra_css = _CSS_DEPTH_TABS
+    else:
+        article_html = _md_to_html(md_content, current_html)
+        extra_css = ""
+
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{_esc(title)} — {_esc(tema)}</title>
-  <style>{_CSS_ROOT}{_CSS_BASE}{_CSS_ARTICLE}</style>
+  <style>{_CSS_ROOT}{_CSS_BASE}{_CSS_ARTICLE}{extra_css}</style>
 </head>
 <body>
   <header>
@@ -225,6 +271,11 @@ def _render_concept_page(tema: str, title: str, md_content: str, nav_html: str, 
     <nav>
       <h2>Navegação</h2>
       {active_nav}
+      <div class="section">
+        <div class="section-title">Ferramentas</div>
+        <a href="flashcards.html">🃏 Flashcards</a>
+        <a href="quiz.html">📝 Quiz</a>
+      </div>
     </nav>
     <main>
       <article>{article_html}</article>
@@ -232,6 +283,65 @@ def _render_concept_page(tema: str, title: str, md_content: str, nav_html: str, 
   </div>
 </body>
 </html>"""
+
+
+def _split_depth_sections(md: str) -> dict | None:
+    """
+    Se o .md tem ## TL;DR e ## Conteúdo Completo, retorna as seções separadas.
+    Caso contrário retorna None (render normal).
+    """
+    tldr_m = re.search(r'^## TL;DR\s*$', md, re.MULTILINE)
+    completo_m = re.search(r'^## Conteúdo Completo\s*$', md, re.MULTILINE)
+    if not (tldr_m and completo_m):
+        return None
+
+    resumo_m = re.search(r'^## Resumo\b', md, re.MULTILINE)
+
+    preamble = md[:tldr_m.start()]
+
+    if resumo_m and resumo_m.start() > tldr_m.start():
+        tldr_text = md[tldr_m.start():resumo_m.start()]
+        if completo_m.start() > resumo_m.start():
+            resumo_text = md[resumo_m.start():completo_m.start()]
+        else:
+            resumo_text = md[resumo_m.start():]
+    else:
+        tldr_text = md[tldr_m.start():completo_m.start()]
+        resumo_text = ""
+
+    completo_text = md[completo_m.start():]
+
+    return {
+        "preamble": preamble,
+        "tldr": tldr_text,
+        "resumo": resumo_text,
+        "completo": completo_text,
+    }
+
+
+def _render_depth_tabs(sections: dict, current_html: str) -> str:
+    """Renderiza o conteúdo com tabs CSS-only: Rápido / Médio / Completo."""
+    preamble_html = _md_to_html(sections["preamble"], current_html)
+    tldr_html = _md_to_html(sections["tldr"], current_html)
+    resumo_html = _md_to_html(sections["resumo"] or sections["tldr"], current_html)
+    completo_html = _md_to_html(sections["completo"], current_html)
+
+    return f"""{preamble_html}
+<div class="depth-tabs">
+  <input type="radio" id="tab-rapido"   name="depth">
+  <input type="radio" id="tab-medio"    name="depth">
+  <input type="radio" id="tab-completo" name="depth" checked>
+  <div class="tab-labels">
+    <label for="tab-rapido">⚡ Rápido</label>
+    <label for="tab-medio">📖 Médio</label>
+    <label for="tab-completo">📚 Completo</label>
+  </div>
+  <div class="depth-content">
+    <div class="content-rapido">{tldr_html}</div>
+    <div class="content-medio">{resumo_html}</div>
+    <div class="content-completo">{completo_html}</div>
+  </div>
+</div>"""
 
 
 def _md_to_html(md: str, current_html: str) -> str:

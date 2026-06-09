@@ -70,12 +70,27 @@ def main(
     didatica: str = typer.Option("", "--didatica", "-d", help="Estilo didático (ex: formal, prático, exemplos do mundo real)"),
     pasta: str = typer.Option("", "--pasta", "-p", help="Caminho absoluto da pasta destino"),
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
-    config_path: str = typer.Option("", "--config", "-c", help="Caminho para config.yaml"),
+    config_path: str = typer.Option("", "--config", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
     mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado)"),
+    chat: bool = typer.Option(False, "--chat", "-c", help="Abre chat interativo sobre a pasta de estudos"),
+    chat_mode: str = typer.Option("qa", "--chat-mode", help="Modo do chat: qa (NotebookLM) | socratico"),
 ):
     config = _load_config(config_path)
 
+    # ── Modo chat ────────────────────────────────────────────────────────────
+    if chat:
+        if not pasta:
+            pasta = Prompt.ask("[blue]Pasta de estudos[/blue] (caminho absoluto)")
+        pasta = str(Path(pasta).expanduser().resolve())
+        if chat_mode not in ("qa", "socratico"):
+            console.print(f"[red]--chat-mode inválido:[/red] '{chat_mode}'. Use: qa | socratico")
+            sys.exit(1)
+        from src.chat import run as chat_run
+        chat_run(config=config, pasta=pasta, mode=chat_mode)
+        return
+
+    # ── Modo geração ─────────────────────────────────────────────────────────
     if interactive or not tema:
         tema, foco, didatica, pasta, fontes = _interactive_prompt(tema, foco, didatica, pasta, fontes)
 
