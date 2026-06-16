@@ -27,8 +27,9 @@ def get_video_info(url: str) -> dict:
     return {"title": url, "duration": 0, "uploader": "", "description": ""}
 
 
-def get_youtube_transcript(url: str) -> str:
-    """Baixa a transcrição/legenda do YouTube via yt-dlp."""
+def get_youtube_transcript(url: str, config: dict | None = None) -> str:
+    """Baixa a transcrição/legenda do YouTube via yt-dlp.
+    Se não houver legendas, faz download do áudio e transcreve via Whisper (Groq ou local)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         out_tmpl = os.path.join(tmpdir, "%(title)s.%(ext)s")
 
@@ -45,8 +46,26 @@ def get_youtube_transcript(url: str) -> str:
             if vtt_files:
                 return _parse_vtt(vtt_files[0].read_text(encoding="utf-8", errors="replace"))
 
-        # Sem legendas disponíveis
-        return ""
+    # Sem legendas — tenta transcrição via Whisper se config disponível
+    if config:
+        return _transcribe_youtube_audio(url, config)
+
+    return ""
+
+
+def _transcribe_youtube_audio(url: str, config: dict) -> str:
+    """Baixa o áudio do YouTube e transcreve via Whisper (Groq API ou local)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_tmpl = os.path.join(tmpdir, "audio.%(ext)s")
+        result = subprocess.run(
+            ["yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
+             "-o", out_tmpl, url],
+            capture_output=True, text=True, timeout=300,
+        )
+        audio_files = list(Path(tmpdir).glob("*.mp3")) or list(Path(tmpdir).glob("audio.*"))
+        if not audio_files:
+            return ""
+        return transcribe_local_video(str(audio_files[0]), config)
 
 
 def transcribe_local_video(path: str, config: dict) -> str:
@@ -117,9 +136,9 @@ def _parse_vtt(vtt_text: str) -> str:
         ln = ln.strip()
         if not ln:
             continue
-        if ln.startswith("WEBVTT") or ln.startswith("NOTE") or "-->" in ln:
+        if "-->" in ln:
             continue
-        if re.match(r"^\d+$", ln):
+        if re.match(r"^(WEBVTT|NOTE|Kind:|Language:|\d+$)", ln):
             continue
         ln = re.sub(r"<[^>]+>", "", ln).strip()
         if ln and ln not in seen:

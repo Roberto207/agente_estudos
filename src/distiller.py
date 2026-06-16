@@ -100,7 +100,7 @@ def _make_out_path(pasta: str, tipo: str, idx: int) -> str:
 
 def _process_youtube(url: str, config: dict) -> dict:
     info = get_video_info(url)
-    transcript = get_youtube_transcript(url)
+    transcript = get_youtube_transcript(url, config)
     return {
         "title": info["title"],
         "source_type": "vídeo YouTube",
