@@ -267,9 +267,10 @@ def _print_tool_calls(tool_calls: list[dict], iteration: int) -> None:
 
 
 def _run_postprocessing(llm, pasta: str) -> None:
-    """Gera flashcards e quiz após o loop do agente."""
+    """Gera flashcards, quiz e próximos passos após o loop do agente."""
     from .generators.flashcards import generate as gen_flashcards
     from .generators.quiz import generate as gen_quiz
+    from .generators.next_steps import generate as gen_next_steps
 
     console.print("\n[bold purple]Pós-processamento[/bold purple]")
 
@@ -292,6 +293,16 @@ def _run_postprocessing(llm, pasta: str) -> None:
             console.print("  [dim]Quiz: sem conteúdo suficiente[/dim]")
     except Exception as exc:
         console.print(f"  [dim]Quiz: falhou ({exc})[/dim]")
+
+    try:
+        with console.status("[yellow]Gerando recomendações de próximos passos...[/yellow]"):
+            ns_path = gen_next_steps(llm, pasta)
+        if ns_path:
+            console.print(f"  [green]✓[/green] Próximos passos: {ns_path}")
+        else:
+            console.print("  [dim]Próximos passos: sem conteúdo suficiente[/dim]")
+    except Exception as exc:
+        console.print(f"  [dim]Próximos passos: falhou ({exc})[/dim]")
 
 
 class ToolsNotSupportedError(Exception):

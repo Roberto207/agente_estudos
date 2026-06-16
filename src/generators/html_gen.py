@@ -111,7 +111,8 @@ def generate_html_files(pasta: str, tema: str, foco: str, structure: dict) -> li
     Path(html_dir).mkdir(parents=True, exist_ok=True)
 
     all_pages = _collect_pages(pasta, structure)
-    nav_html = _build_nav(tema, all_pages)
+    tema_slug = _slug(tema)
+    nav_html = _build_nav(tema, all_pages, tema_slug)
 
     generated = []
 
@@ -163,7 +164,14 @@ def _collect_pages(pasta: str, structure: dict) -> list[dict]:
     return pages
 
 
-def _build_nav(tema: str, pages: list[dict]) -> str:
+def _slug(s: str) -> str:
+    import re
+    s = s.lower().strip()
+    s = re.sub(r"[^\w\s]", "", s)
+    return re.sub(r"\s+", "_", s)
+
+
+def _build_nav(tema: str, pages: list[dict], tema_slug: str = "") -> str:
     by_sf: dict[str, list[dict]] = {}
     for p in pages:
         by_sf.setdefault(p["subfolder"] or "raiz", []).append(p)
@@ -175,6 +183,13 @@ def _build_nav(tema: str, pages: list[dict]) -> str:
         for p in pgs:
             sections.append(f'<a href="{p["html_name"]}" data-page="{p["html_name"]}">{p["title"]}</a>')
         sections.append("</div>")
+
+    if tema_slug:
+        sections.append(
+            f'<div class="section"><div class="section-title">Visual</div>'
+            f'<a href="../visual_{tema_slug}.html">🗺️ Mapa Mental</a>'
+            f'</div>'
+        )
 
     return "\n".join(sections)
 

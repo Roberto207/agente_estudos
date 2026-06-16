@@ -27,6 +27,7 @@ from .tools.web import web_search
 from .generators.content import plan_structure, research_topics, write_content_files, write_guia
 from .generators.canvas import write_canvas_files
 from .generators.html_gen import generate_html_files
+from .generators.visual_map import generate_visual_map
 
 
 def run(
@@ -121,8 +122,12 @@ def run(
     _step(console, 8, "Gerando arquivos HTML")
     html_paths = generate_html_files(pasta, tema, foco, structure)
 
+    # ── Fase 9: Mapa Mental ───────────────────────────────────────────────────
+    _step(console, 9, "Gerando mapa mental visual")
+    visual_path = generate_visual_map(pasta, tema, structure)
+
     # ── Relatório Final ───────────────────────────────────────────────────────
-    _print_report(console, pasta, written, html_paths, canvas_paths, transcript_paths)
+    _print_report(console, pasta, written, html_paths, canvas_paths, transcript_paths, visual_path)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -204,14 +209,20 @@ def _print_report(
     html_files: list[str],
     canvas_files: list[str],
     transcript_files: list[str],
+    visual_path: str = "",
 ) -> None:
     index_path = os.path.join(pasta, "html", "index.html")
+    visual_line = (
+        f"[bold]Mapa mental:[/bold]\n[cyan]file://{os.path.abspath(visual_path)}[/cyan]\n\n"
+        if visual_path else ""
+    )
     console.print(Panel(
         f"[bold green]Concluído![/bold green]\n\n"
         f"[blue]Arquivos .md criados:[/blue] {len(md_files)}\n"
         f"[blue]Arquivos HTML gerados:[/blue] {len(html_files)}\n"
         f"[blue]Canvas Obsidian:[/blue] {len(canvas_files)}\n"
         f"[blue]Transcrições:[/blue] {len(transcript_files)}\n\n"
+        f"{visual_line}"
         f"[bold]Abrir hub:[/bold]\n"
         f"[cyan]file://{os.path.abspath(index_path)}[/cyan]",
         title="Relatório Final",

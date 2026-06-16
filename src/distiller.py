@@ -3,11 +3,17 @@ Distiller: replica a lógica do agente ai-lecture-distiller.
 Classifica cada fonte e gera um arquivo de transcrição/resumo estruturado.
 """
 from __future__ import annotations
+import json
 import os
+import re
 from pathlib import Path
+
+import requests
 
 from .llm import LLMClient
 from .tools.web import fetch_url, web_search
+
+_GITHUB_HEADERS = {"User-Agent": "agente-estudos/1.0"}
 from .tools.video import get_video_info, get_youtube_transcript, transcribe_local_video
 
 
@@ -57,6 +63,8 @@ def distill_source(
         raw = _process_youtube(fonte, config)
     elif tipo == "local_video":
         raw = _process_local_video(fonte, config)
+    elif tipo == "github":
+        raw = _process_github(fonte, config)
     elif tipo == "paper":
         raw = _process_paper(fonte)
     elif tipo == "article":
@@ -78,6 +86,8 @@ def _classify(fonte: str) -> str:
         return "youtube"
     if any(fl.endswith(ext) for ext in [".mp4", ".mkv", ".avi", ".webm", ".mov", ".m4v"]):
         return "local_video"
+    if "github.com/" in fl:
+        return "github"
     if any(x in fl for x in ["arxiv.org", "acm.org", "ieee.org", "scholar.google"]):
         return "paper"
     if fl.startswith("http://") or fl.startswith("https://"):
@@ -89,6 +99,7 @@ def _make_out_path(pasta: str, tipo: str, idx: int) -> str:
     names = {
         "youtube": f"transcript_{idx}.md",
         "local_video": f"transcript_{idx}.md",
+        "github": f"github_{idx}.md",
         "article": f"artigo_{idx}.md",
         "paper": f"paper_{idx}.md",
         "search": f"pesquisa_{idx}.md",
@@ -117,6 +128,89 @@ def _process_local_video(path: str, config: dict) -> dict:
         "metadata": "",
         "raw": transcript,
     }
+
+
+def _process_github(url: str, config: dict) -> dict:
+    owner, repo = _parse_github_url(url)
+    headers = dict(_GITHUB_HEADERS)
+    token = config.get("source_discovery", {}).get("github_token", "")
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    readme = ""
+    for branch in ("main", "master"):
+        try:
+            resp = requests.get(
+                f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/README.md",
+                headers=headers, timeout=20,
+            )
+            if resp.status_code == 200:
+                readme = resp.text[:8000]
+                break
+        except Exception:
+            pass
+
+    notebooks_text = ""
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1",
+            headers=headers, timeout=20,
+        )
+        if resp.status_code == 200:
+            tree = resp.json().get("tree", [])
+            nb_paths = [
+                item["path"] for item in tree
+                if item.get("path", "").endswith(".ipynb") and item.get("type") == "blob"
+            ][:2]
+            for nb_path in nb_paths:
+                for branch in ("main", "master"):
+                    try:
+                        nb_resp = requests.get(
+                            f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{nb_path}",
+                            headers=headers, timeout=20,
+                        )
+                        if nb_resp.status_code == 200:
+                            nb_text = _extract_notebook_text(nb_resp.text)
+                            if nb_text:
+                                notebooks_text += f"\n\n### Notebook: {nb_path}\n{nb_text[:3000]}"
+                            break
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    raw = f"# {owner}/{repo}\n\n{readme}{notebooks_text}"
+    return {
+        "title": f"{owner}/{repo}",
+        "source_type": "repositório GitHub",
+        "metadata": f"GitHub: {url}",
+        "raw": raw or f"[Conteúdo indisponível: {url}]",
+    }
+
+
+def _parse_github_url(url: str) -> tuple[str, str]:
+    m = re.search(r"github\.com/([^/]+)/([^/?\s#]+)", url)
+    if not m:
+        raise ValueError(f"URL GitHub inválida: {url}")
+    return m.group(1), m.group(2)
+
+
+def _extract_notebook_text(json_text: str) -> str:
+    try:
+        nb = json.loads(json_text)
+        parts: list[str] = []
+        for cell in nb.get("cells", []):
+            src = cell.get("source", [])
+            text = "".join(src) if isinstance(src, list) else str(src)
+            if not text.strip():
+                continue
+            if cell.get("cell_type") == "markdown":
+                parts.append(text.strip())
+            elif cell.get("cell_type") == "code" and len(text.strip()) > 20:
+                parts.append(f"```python\n{text.strip()}\n```")
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
 
 
 def _process_paper(url: str) -> dict:

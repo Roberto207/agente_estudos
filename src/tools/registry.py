@@ -139,6 +139,73 @@ _TOOL_DEFS = [
             "required": ["path"],
         },
     },
+    {
+        "name": "search_sources",
+        "description": (
+            "Descobre fontes de estudo de alta qualidade para um tema. "
+            "Busca em YouTube, papers acadêmicos (arXiv, Semantic Scholar), "
+            "repositórios GitHub e artigos, organizando em três camadas progressivas: "
+            "fundamentos, moderno (técnicas recentes) e pratico (código/implementações). "
+            "Use quando o usuário não fornecer fontes ou quiser complementar as existentes."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tema": {
+                    "type": "string",
+                    "description": "Tema principal de estudo"
+                },
+                "foco": {
+                    "type": "string",
+                    "description": "Tópicos específicos de foco (opcional)"
+                },
+                "max_per_camada": {
+                    "type": "integer",
+                    "description": "Máximo de fontes por camada (padrão: 5)",
+                    "default": 5,
+                },
+            },
+            "required": ["tema"],
+        },
+    },
+    {
+        "name": "fetch_github_content",
+        "description": (
+            "Extrai o conteúdo de um repositório GitHub: README.md e notebooks Jupyter (.ipynb). "
+            "Retorna texto combinado pronto para distilação. "
+            "Use para processar repositórios descobertos pelo search_sources."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "URL do repositório GitHub (ex: https://github.com/owner/repo)"
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "recommend_next_steps",
+        "description": (
+            "Analisa os materiais de estudo em uma pasta e gera proximos_passos.md com: "
+            "(1) síntese do que foi coberto, (2) caminho principal — próximos tópicos sequenciais, "
+            "(3) desvios pertinentes — tópicos fora do escopo mas valiosos, "
+            "(4) conexões inesperadas com outras áreas. "
+            "Use ao final da criação dos materiais de estudo."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pasta": {
+                    "type": "string",
+                    "description": "Caminho absoluto da pasta de estudos"
+                },
+            },
+            "required": ["pasta"],
+        },
+    },
 ]
 
 
@@ -207,6 +274,15 @@ def execute_tool(name: str, inputs: dict, config: dict) -> str:
         if name == "list_directory":
             return list_directory(inputs["path"])
 
+        if name == "search_sources":
+            return _search_sources_tool(inputs, config)
+
+        if name == "fetch_github_content":
+            return _fetch_github_tool(inputs["url"], config)
+
+        if name == "recommend_next_steps":
+            return _recommend_next_steps_tool(inputs["pasta"], config)
+
         return f"[Ferramenta desconhecida: {name}]"
 
     except Exception as exc:
@@ -235,6 +311,75 @@ def execute_tools_batch(
             results[i] = {"id": tool_calls[i]["id"], "result": result}
 
     return results
+
+
+# ── Source discovery tools ────────────────────────────────────────────────────
+
+def _search_sources_tool(inputs: dict, config: dict) -> str:
+    from ..source_discovery import SourceDiscoverer
+    from ..llm import LLMClient as _LLMClient
+
+    llm = _LLMClient(config)
+    discoverer = SourceDiscoverer(config, llm)
+    sources = discoverer.discover(
+        inputs["tema"],
+        inputs.get("foco", ""),
+        inputs.get("max_per_camada", 5),
+    )
+    if not sources:
+        return "[Nenhuma fonte encontrada]"
+
+    camadas = ["fundamentos", "moderno", "pratico"]
+    icons = {"fundamentos": "📚", "moderno": "⚡", "pratico": "🔧"}
+    lines = [f"## FONTES DESCOBERTAS — {inputs['tema']}\n"]
+    by_camada: dict[str, list] = {c: [] for c in camadas}
+    for s in sources:
+        camada = s.camada if s.camada in camadas else "fundamentos"
+        by_camada[camada].append(s)
+
+    for camada in camadas:
+        items = by_camada[camada]
+        if not items:
+            continue
+        lines.append(f"\n### {icons[camada]} {camada.upper()}\n")
+        for s in items:
+            meta_parts = []
+            if s.metadata.get("citationCount"):
+                meta_parts.append(f"citações: {s.metadata['citationCount']}")
+            if s.metadata.get("stars"):
+                meta_parts.append(f"⭐{s.metadata['stars']:,}")
+            if s.metadata.get("duration"):
+                meta_parts.append(f"{s.metadata['duration'] // 60}min")
+            meta = f"  [{', '.join(meta_parts)}]" if meta_parts else ""
+            lines.append(
+                f"- **{s.titulo}** ({s.tipo})\n"
+                f"  URL: {s.url}\n"
+                f"  Score: {s.score:.1f} | {s.motivo}{meta}\n"
+            )
+
+    return "\n".join(lines)
+
+
+def _fetch_github_tool(url: str, config: dict) -> str:
+    from ..distiller import _process_github
+    try:
+        data = _process_github(url, config)
+        return data["raw"][:8000]
+    except Exception as exc:
+        return f"[Erro ao buscar GitHub {url}: {exc}]"
+
+
+def _recommend_next_steps_tool(pasta: str, config: dict) -> str:
+    from ..generators.next_steps import generate
+    from ..llm import LLMClient as _LLMClient
+    llm = _LLMClient(config)
+    try:
+        path = generate(llm, pasta)
+        if path:
+            return f"proximos_passos.md gerado em: {path}"
+        return "[Sem arquivos .md na pasta para analisar]"
+    except Exception as exc:
+        return f"[Erro ao gerar próximos passos: {exc}]"
 
 
 # ── Video transcription (encapsula distiller) ─────────────────────────────────

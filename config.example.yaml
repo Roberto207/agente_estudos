@@ -40,3 +40,14 @@ transcription:
 # ── Busca Web ────────────────────────────────────────────────
 search:
   max_results: 5                     # resultados por query de pesquisa
+
+# ── Descoberta de Fontes (buscar_fontes.py) ───────────────────
+# Todos os campos são opcionais — o sistema funciona sem eles.
+# github_token: aumenta rate limit da API do GitHub (60→5000 req/hora)
+# youtube_api_key: melhora metadados de vídeos (não obrigatório)
+source_discovery:
+  github_token: ""          # ghp_... (opcional)
+  youtube_api_key: ""       # AIza... (opcional, não usado atualmente)
+  max_per_camada: 5         # fontes por camada (fundamentos / moderno / pratico)
+  min_youtube_duration: 300 # duração mínima de vídeos em segundos (padrão: 5 min)
+  min_github_stars: 100     # estrelas mínimas para repositórios GitHub
