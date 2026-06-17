@@ -6,9 +6,11 @@ from pathlib import Path
 from ..llm import LLMClient
 
 
-_SYSTEM_WRITER = """Você é um especialista em criar materiais de estudo de alta qualidade em português brasileiro.
+_SYSTEM_WRITER = """Você é um especialista em criar materiais de estudo de altíssima qualidade em português brasileiro. Seu padrão de referência são apostilas universitárias e livros técnicos — não artigos de blog.
 
-Escreva um arquivo .md para um vault Obsidian seguindo EXATAMENTE esta estrutura:
+Escreva um arquivo .md para um vault Obsidian seguindo EXATAMENTE esta estrutura e os requisitos de profundidade abaixo:
+
+---
 
 # Título do Conceito
 
@@ -17,25 +19,28 @@ Escreva um arquivo .md para um vault Obsidian seguindo EXATAMENTE esta estrutura
 ---
 
 ## TL;DR
-[2 parágrafos curtos com o ESSENCIAL do conceito — para leitura rápida de 2 minutos]
+[MÍNIMO 3 parágrafos densos. Cubra: (1) o que é e por que existe, (2) como funciona em alto nível com a intuição central, (3) quando usar e o que diz a literatura. Deve ter entre 200 e 300 palavras. NÃO use listas aqui — use prosa densa.]
 
 ---
 
 ## Resumo (5 min)
-[Principais pontos com exemplos diretos — para revisão em 5 minutos]
+[Mínimo 8 bullet points substantivos, cada um com 2-4 linhas de explicação real — não títulos de seção. Inclua pelo menos uma fórmula ou equação relevante, e pelo menos um exemplo concreto com números ou código de 3-5 linhas. Entre 350 e 500 palavras.]
 
 ---
 
 ## Conteúdo Completo
 
-### Seção Principal
-Conteúdo profundo e didático. Inclua:
-- Exemplos práticos (com blocos de código quando aplicável)
-- Tabelas para comparações quando relevante
-- Imagens referenciadas como: ![descrição](url)
+### [Seção 1: Fundação teórica]
+[Mínimo 300 palavras. Definição formal, intuição matemática quando aplicável, histórico ou motivação. Pelo menos uma fórmula em bloco ou equação relevante.]
 
-### Seção Seguinte
-...
+### [Seção 2: Algoritmos / Variantes / Como funciona internamente]
+[Mínimo 400 palavras. Cubra TODAS as variantes ou etapas relevantes do conceito, não apenas uma. Inclua pelo menos um bloco de código real e funcional (não pseudocódigo esqueleto) com comentários explicativos em cada linha relevante. Se houver múltiplos algoritmos (ex: L1 vs L2, SGD vs Adam), compare-os em tabela e explique cada um em pelo menos 2 parágrafos.]
+
+### [Seção 3: Intuição visual / Exemplos numéricos / Casos práticos]
+[Mínimo 300 palavras. Trace um exemplo passo a passo com números concretos, ou descreva o comportamento visual de gráficos/curvas. Conecte a teoria ao comportamento observável.]
+
+### [Seção 4: Trade-offs, erros comuns e quando NÃO usar]
+[Mínimo 200 palavras. O que pode dar errado, quais os hiperparâmetros críticos, como diagnosticar problemas, comparação com alternativas.]
 
 ---
 
@@ -43,14 +48,33 @@ Conteúdo profundo e didático. Inclua:
 - Próximo: [[arquivo_seguinte]]
 - Ver também: [[arquivo_relacionado]]
 
-REGRAS:
-- Adapte profundidade e linguagem à didática solicitada
-- Formal = rigor e definições precisas
-- Prático = exemplos e código em primeiro lugar
-- "Exemplos do mundo real" = analogias antes da teoria
-- Links Obsidian [[nome]] sem extensão .md
-- Não repita o que já está em outros arquivos — cada arquivo tem foco único
-- Os três níveis (TL;DR, Resumo, Conteúdo Completo) devem ser autossuficientes
+---
+
+## REQUISITOS OBRIGATÓRIOS DE QUALIDADE
+
+**Comprimento mínimo total**: 1400 palavras. Arquivos curtos são REJEITADOS.
+
+**Por seção do Conteúdo Completo**:
+- Cada `###` deve ter no mínimo 200 palavras
+- Nenhuma subseção pode ter apenas 1 parágrafo e um código
+- Código deve ser real e funcional, não esqueleto conceitual de 5 linhas
+- Fórmulas matemáticas devem vir com explicação de cada variável
+
+**PROIBIDO** (causas automáticas de reescrita):
+- Seções com apenas 1 parágrafo e um bloco de código
+- Pseudocódigo genérico como único exemplo (`for x in data: loss = loss(pred, y)`)
+- Bullet points que são apenas títulos sem explicação ("Classificação: saída discreta")
+- Omitir variantes/algoritmos que fazem parte do tema (ex: falar só de L2 num arquivo sobre regularização)
+- TL;DR com menos de 150 palavras
+- Tabelas com apenas 2 colunas e 3 linhas quando o tema tem 5+ variantes a comparar
+
+**ADAPTE à didática solicitada**:
+- Formal/matemático = definições precisas, fórmulas com prova ou derivação parcial, notação consistente
+- Prático/código = exemplos funcionais com scikit-learn/PyTorch/HuggingFace, saídas esperadas comentadas
+- "Exemplos do mundo real" = analogia concreta antes de cada conceito abstrato, casos de uso reais nomeados
+
+**Links Obsidian**: `[[nome_do_arquivo]]` sem extensão. Não repita conteúdo de outros arquivos — referencie-os.
+Os três níveis (TL;DR, Resumo, Conteúdo Completo) devem ser autossuficientes: alguém lendo só o Conteúdo Completo não deve precisar dos outros.
 """
 
 
@@ -272,29 +296,41 @@ def _write_file(
     if related:
         nav_footer += f"- Ver também: " + ", ".join(f"[[{r}]]" for r in related) + "\n"
 
+    related_titles = [
+        f.get("title", f["name"]) for _, f in all_files
+        if f["name"] != file_info["name"]
+    ][:4]
+
     prompt = f"""Escreva o arquivo de estudo: **{file_info['title']}**
 
 **Tema geral**: {tema}
 **Foco do tema**: {foco}
-**Didática solicitada**: {didatica or 'didática clara, prática, com exemplos'}
+**Didática solicitada**: {didatica or 'didática clara, prática, com exemplos de código funcional e fórmulas explicadas'}
 **Subpasta**: {subfolder}
 **Descrição deste arquivo**: {file_info.get('description', '')}
+**Outros arquivos na pasta** (referencie-os com [[nome]] mas não repita o conteúdo deles): {', '.join(related_titles)}
 
-**Material de referência das fontes** (use para embasar o conteúdo):
-{transcripts[:6000]}
+**Material de referência das fontes** (use para embasar o conteúdo com autoridade):
+{transcripts[:8000]}
 
 **Pesquisa complementar**:
-{research[:3000]}
+{research[:4000]}
 
-**Navegação (adicione ao final do arquivo)**:
+**Navegação (adicione EXATAMENTE ao final do arquivo)**:
 {nav_footer}
 
-Escreva o arquivo .md completo com profundidade real. Mínimo 400 palavras. Inclua exemplos, código quando relevante e tabelas quando ajudar na compreensão."""
+---
+
+ATENÇÃO: Este arquivo deve ter MÍNIMO 1400 palavras no total.
+Cada subseção do "Conteúdo Completo" deve ter no mínimo 200 palavras.
+Inclua código Python funcional real (não pseudocódigo) quando o tema envolver algoritmos ou implementação.
+Cubra TODAS as variantes/algoritmos relevantes do tema — não apenas o caso mais simples.
+Se omitir algum algoritmo importante do tema, o arquivo será rejeitado e reescrito."""
 
     return llm.chat(
         messages=[{"role": "user", "content": prompt}],
         system=_SYSTEM_WRITER,
-        max_tokens=4096,
+        max_tokens=8192,
     )
 
 
