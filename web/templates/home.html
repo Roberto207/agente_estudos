@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}estudAI — Espaços{% endblock %}
+
+{% block content %}
+<header class="border-b border-edge bg-surface px-8 py-4 flex items-center gap-3">
+  <h1 class="text-xl font-bold text-accent">estud<span class="text-teal">AI</span></h1>
+  <span class="text-muted text-sm">{{ vault_root }}</span>
+</header>
+
+<main class="px-8 py-8 max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-lg font-semibold text-primary">Seus espaços</h2>
+    <div class="flex gap-2">
+      <button onclick="document.getElementById('dlg-open').showModal()"
+              class="px-4 py-2 rounded-lg border border-edge text-secondary hover:bg-surface2 text-sm">
+        Abrir pasta existente
+      </button>
+      <button onclick="document.getElementById('dlg-create').showModal()"
+              class="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium">
+        + Criar espaço
+      </button>
+    </div>
+  </div>
+
+  {% if spaces %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for s in spaces %}
+    <a href="/w/{{ s.space_id }}"
+       class="block bg-surface border border-edge rounded-xl p-5 hover:border-accent transition-colors">
+      <h3 class="font-semibold text-primary mb-1">{{ s.nome }}</h3>
+      <p class="text-xs text-muted truncate mb-3">{{ s.path }}</p>
+      <p class="text-xs text-secondary">{{ s.total_arquivos }} arquivo(s) .md</p>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="border border-dashed border-edge rounded-xl p-12 text-center text-muted">
+    Nenhum espaço encontrado em <span class="text-secondary">{{ vault_root }}</span>.
+    Crie um novo ou abra uma pasta existente.
+  </div>
+  {% endif %}
+</main>
+
+<dialog id="dlg-create" class="bg-surface text-primary border border-edge rounded-xl p-6 w-96 backdrop:bg-black/60">
+  <h3 class="font-semibold mb-4">Criar espaço</h3>
+  <input id="create-nome" type="text" placeholder="Nome do espaço"
+         class="w-full bg-surface2 border border-edge rounded-lg px-3 py-2 mb-3 text-sm outline-none focus:border-accent">
+  <input id="create-parent" type="text" placeholder="Pasta pai (opcional — padrão: vault_root)"
+         class="w-full bg-surface2 border border-edge rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-accent">
+  <p id="create-error" class="text-danger text-xs mb-3 hidden"></p>
+  <div class="flex justify-end gap-2">
+    <button onclick="document.getElementById('dlg-create').close()" class="px-3 py-1.5 text-sm text-secondary">Cancelar</button>
+    <button onclick="EstudAI.createSpace()" class="px-3 py-1.5 text-sm bg-accent hover:bg-accent-hover rounded-lg text-white">Criar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-open" class="bg-surface text-primary border border-edge rounded-xl p-6 w-96 backdrop:bg-black/60">
+  <h3 class="font-semibold mb-4">Abrir pasta existente</h3>
+  <input id="open-path" type="text" placeholder="Caminho absoluto (ex: ~/obsidian/redes_neurais)"
+         class="w-full bg-surface2 border border-edge rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-accent">
+  <p id="open-error" class="text-danger text-xs mb-3 hidden"></p>
+  <div class="flex justify-end gap-2">
+    <button onclick="document.getElementById('dlg-open').close()" class="px-3 py-1.5 text-sm text-secondary">Cancelar</button>
+    <button onclick="EstudAI.openSpace()" class="px-3 py-1.5 text-sm bg-accent hover:bg-accent-hover rounded-lg text-white">Abrir</button>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/home.js"></script>
+{% endblock %}

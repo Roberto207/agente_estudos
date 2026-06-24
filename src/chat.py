@@ -22,7 +22,7 @@ console = Console()
 _MAX_HISTORY = 20
 _MAX_TOOL_TURNS = 6  # chamadas de search_vault por pergunta, antes de forçar resposta final
 
-_SYSTEM_QA = """\
+SYSTEM_QA = """\
 Você é um tutor especialista e assistente de estudos pessoal.
 Use a ferramenta search_vault para buscar nos materiais de estudo ANTES de responder —
 chame quantas vezes precisar, com queries diferentes, até reunir contexto suficiente.
@@ -33,7 +33,7 @@ Se a busca não retornar nada relevante, diga isso claramente em vez de inventar
 Responda sempre em português brasileiro.
 """
 
-_SYSTEM_SOCRATICO = """\
+SYSTEM_SOCRATICO = """\
 Você é um tutor socrático experiente e paciente.
 Use a ferramenta search_vault para se basear nos materiais de estudo reais do usuário
 antes de formular perguntas — não invente contexto que não esteja nos materiais.
@@ -46,6 +46,10 @@ Em vez disso:
 - Adapte a dificuldade ao que o estudante demonstra saber
 Responda sempre em português brasileiro.
 """
+
+# Aliases privados (compat com qualquer import antigo) — preferir os nomes públicos acima.
+_SYSTEM_QA = SYSTEM_QA
+_SYSTEM_SOCRATICO = SYSTEM_SOCRATICO
 
 
 def run(config: dict, pasta: str, mode: str = "qa") -> None:
@@ -73,7 +77,7 @@ def run(config: dict, pasta: str, mode: str = "qa") -> None:
 
     history: list[dict] = []
     mode_label, mode_color = _mode_info(mode)
-    system = _SYSTEM_QA if mode == "qa" else _SYSTEM_SOCRATICO
+    system = SYSTEM_QA if mode == "qa" else SYSTEM_SOCRATICO
 
     console.print(Panel(
         f"[bold {mode_color}]Modo:[/bold {mode_color}] {mode_label}\n"
@@ -110,7 +114,7 @@ def run(config: dict, pasta: str, mode: str = "qa") -> None:
         if cmd == "/modo":
             mode = "socratico" if mode == "qa" else "qa"
             mode_label, mode_color = _mode_info(mode)
-            system = _SYSTEM_QA if mode == "qa" else _SYSTEM_SOCRATICO
+            system = SYSTEM_QA if mode == "qa" else SYSTEM_SOCRATICO
             history.clear()
             console.print(f"[dim]Modo alterado para [bold]{mode_label}[/bold] (histórico limpo).[/dim]")
             continue
@@ -121,7 +125,7 @@ def run(config: dict, pasta: str, mode: str = "qa") -> None:
 
         try:
             with console.status("[dim]Buscando e pensando...[/dim]"):
-                response = _answer_with_tools(
+                response = answer_with_tools(
                     llm, history.copy(), tools, system, provider, chat_config
                 )
         except ToolsNotSupportedError:
@@ -144,8 +148,9 @@ def run(config: dict, pasta: str, mode: str = "qa") -> None:
 
 
 # ── Loop agentico de uma pergunta (search_vault 0-N vezes, depois resposta final) ──
+# Reutilizável fora do chat de terminal (ex: web/routers/chat.py) — não faz I/O.
 
-def _answer_with_tools(
+def answer_with_tools(
     llm: LLMClient,
     messages: list[dict],
     tools: list[dict],
@@ -177,6 +182,9 @@ def _answer_with_tools(
 
     # Limite de chamadas de ferramenta atingido — força uma resposta final sem tools.
     return llm.chat(messages=messages, system=system, max_tokens=2048)
+
+
+_answer_with_tools = answer_with_tools  # alias privado (compat)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

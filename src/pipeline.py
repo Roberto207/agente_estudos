@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Callable
 
 from rich.console import Console
 from rich.panel import Panel
@@ -28,6 +29,14 @@ from .generators.content import plan_structure, research_topics, write_content_f
 from .generators.canvas import write_canvas_files
 from .generators.html_gen import generate_html_files
 from .generators.visual_map import generate_visual_map
+from .postprocessing import run_postprocessing
+
+# Reproduz o comportamento histórico do pipeline: canvas/html/mapa mental sempre
+# ligados, flashcards/quiz/next_steps sempre desligados (o pipeline nunca os gerou).
+_DEFAULT_OUTPUTS = {
+    "canvas": True, "html": True, "mapa_mental": True,
+    "flashcards": False, "quiz": False, "next_steps": False,
+}
 
 
 def run(
@@ -37,7 +46,13 @@ def run(
     didatica: str,
     pasta: str,
     fontes: list[str],
+    on_event: Callable[[str, dict], None] | None = None,
+    outputs: dict | None = None,
 ) -> None:
+    """`on_event`/`outputs` são opcionais e aditivos — chamadas sem esses
+    parâmetros reproduzem exatamente o comportamento histórico do pipeline."""
+    emit = on_event or (lambda *a, **k: None)
+    out = {**_DEFAULT_OUTPUTS, **(outputs or {})}
     console = Console()
     llm = LLMClient(config)
 
@@ -53,16 +68,16 @@ def run(
     ))
 
     # ── Fase 1: Pastas ────────────────────────────────────────────────────────
-    _step(console, 1, "Preparando estrutura de pastas")
+    _step(console, 1, "Preparando estrutura de pastas", emit)
     _setup_folders(pasta)
 
     # ── Fase 2: Extração das fontes ───────────────────────────────────────────
     transcript_paths: list[str] = []
     if fontes:
-        _step(console, 2, f"Extraindo {len(fontes)} fonte(s) em paralelo")
+        _step(console, 2, f"Extraindo {len(fontes)} fonte(s) em paralelo", emit)
         transcript_paths = _extract_sources(fontes, pasta, config, llm, console)
     else:
-        _step(console, 2, "Nenhuma fonte fornecida — usando apenas pesquisa web")
+        _step(console, 2, "Nenhuma fonte fornecida — usando apenas pesquisa web", emit)
 
     # Lê conteúdo das transcrições para contexto
     transcripts_content = _read_transcripts(transcript_paths)
@@ -70,12 +85,12 @@ def run(
         transcripts_content = f"Nenhuma transcrição disponível. Tema: {tema}. Foco: {foco}."
 
     # ── Fase 3: Planejamento ──────────────────────────────────────────────────
-    _step(console, 3, "Planejando estrutura de conteúdo com o LLM")
+    _step(console, 3, "Planejando estrutura de conteúdo com o LLM", emit)
     structure = plan_structure(llm, tema, foco, didatica, transcripts_content)
     _print_structure(console, structure)
 
     # ── Fase 4: Pesquisa complementar ─────────────────────────────────────────
-    _step(console, 4, "Pesquisa complementar na web")
+    _step(console, 4, "Pesquisa complementar na web", emit)
     search_cfg = config.get("search", {})
     research_content = research_topics(
         llm, tema, foco, structure, web_search,
@@ -84,7 +99,7 @@ def run(
 
     # ── Fase 5: Escrita dos arquivos .md ──────────────────────────────────────
     total_files = sum(len(sf.get("files", [])) for sf in structure.get("subfolders", []))
-    _step(console, 5, f"Escrevendo {total_files} arquivo(s) .md")
+    _step(console, 5, f"Escrevendo {total_files} arquivo(s) .md", emit)
 
     with Progress(
         SpinnerColumn(),
@@ -97,6 +112,7 @@ def run(
 
         def on_progress(current, total, title):
             progress.update(task, completed=current, description=f"[cyan]{title}[/cyan]")
+            emit("file_progress", {"current": current, "total": total, "title": title})
 
         written = write_content_files(
             llm=llm,
@@ -111,20 +127,40 @@ def run(
         )
 
     # ── Fase 6: Canvas ────────────────────────────────────────────────────────
-    _step(console, 6, "Criando canvas Obsidian")
-    canvas_paths = write_canvas_files(pasta, tema, structure)
+    canvas_paths: list[str] = []
+    if out["canvas"]:
+        _step(console, 6, "Criando canvas Obsidian", emit)
+        canvas_paths = write_canvas_files(pasta, tema, structure)
+        emit("phase", {"n": 6, "desc": "Canvas Obsidian", "paths": canvas_paths})
 
     # ── Fase 7: Guia de estudos ───────────────────────────────────────────────
-    _step(console, 7, "Gerando guia_de_estudos.md")
+    _step(console, 7, "Gerando guia_de_estudos.md", emit)
     guia_path = write_guia(llm, pasta, tema, foco, structure)
+    emit("phase", {"n": 7, "desc": "Guia de estudos", "paths": [guia_path]})
 
     # ── Fase 8: HTML ──────────────────────────────────────────────────────────
-    _step(console, 8, "Gerando arquivos HTML")
-    html_paths = generate_html_files(pasta, tema, foco, structure)
+    html_paths: list[str] = []
+    if out["html"]:
+        _step(console, 8, "Gerando arquivos HTML", emit)
+        html_paths = generate_html_files(pasta, tema, foco, structure)
+        emit("phase", {"n": 8, "desc": "HTML", "paths": html_paths})
 
     # ── Fase 9: Mapa Mental ───────────────────────────────────────────────────
-    _step(console, 9, "Gerando mapa mental visual")
-    visual_path = generate_visual_map(pasta, tema, structure)
+    visual_path = ""
+    if out["mapa_mental"]:
+        _step(console, 9, "Gerando mapa mental visual", emit)
+        visual_path = generate_visual_map(pasta, tema, structure)
+        emit("phase", {"n": 9, "desc": "Mapa mental", "paths": [visual_path]})
+
+    # ── Fase 10: Flashcards/Quiz/Próximos passos (opcional) ───────────────────
+    if out["flashcards"] or out["quiz"] or out["next_steps"]:
+        _step(console, 10, "Pós-processamento (flashcards/quiz/próximos passos)", emit)
+        # canvas/html/mapa_mental já foram gerados acima (Fases 6/8/9) com o
+        # `structure` planejado de verdade — força desligado aqui pra não duplicar.
+        run_postprocessing(
+            llm, pasta, tema=tema, foco=foco, on_event=on_event,
+            outputs={**out, "canvas": False, "html": False, "mapa_mental": False},
+        )
 
     # ── Relatório Final ───────────────────────────────────────────────────────
     _print_report(console, pasta, written, html_paths, canvas_paths, transcript_paths, visual_path)
@@ -183,8 +219,10 @@ def _read_transcripts(paths: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def _step(console: Console, n: int, desc: str) -> None:
+def _step(console: Console, n: int, desc: str, emit: Callable[[str, dict], None] | None = None) -> None:
     console.print(f"\n[bold blue]Fase {n}[/bold blue] — {desc}")
+    if emit:
+        emit("phase_start", {"n": n, "desc": desc})
 
 
 def _short(s: str, max_len: int = 60) -> str:

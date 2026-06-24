@@ -2,7 +2,7 @@
 
 Sistema agêntico Python que gera pastas de estudo completas e estruturadas para o **Obsidian** a partir de um tema, foco e fontes.
 
-O LLM recebe um conjunto de ferramentas (busca web, download de artigos, transcrição de vídeos, escrita de arquivos) e decide por conta própria como executar a tarefa — sem sequência fixa. Funciona a partir de qualquer terminal, sem dependência de Claude Code ou VSCode.
+O LLM recebe um conjunto de ferramentas (busca web, download de artigos, transcrição de vídeos, escrita de arquivos) e decide por conta própria como executar a tarefa — sem sequência fixa. Funciona a partir de qualquer terminal, sem dependência de Claude Code ou VSCode — ou pela [interface web **estudAI**](#interface-web-estudai) (`uvicorn web.app:app --reload`).
 
 Suporta Anthropic, OpenAI, Groq e Ollama.
 
@@ -253,6 +253,52 @@ Exemplo para RAG:
 
 ---
 
+## Interface Web (estudAI)
+
+Além da CLI, o projeto tem uma interface web local — **estudAI** — inspirada no NotebookLM:
+galeria de "espaços" (pastas de estudo) na home, e um workspace de 3 painéis (estilo
+VSCode/Obsidian) por espaço, com árvore de arquivos, leitor de markdown e abas de Busca de
+Fontes / Geração de Conteúdo / Chat RAG.
+
+A lógica de negócio é exatamente a mesma da CLI (`src/agent.py`, `src/source_discovery.py`,
+`src/chat.py`) — a web é só uma camada de interface nova por cima (FastAPI + Jinja2 + Tailwind
+via CDN + JS vanilla, sem build step nem dependência de Node).
+
+### Rodando
+
+```bash
+uvicorn web.app:app --reload
+```
+
+Abra `http://localhost:8000`.
+
+### Configuração
+
+```yaml
+# config.yaml (opcional — usa ~/obsidian como padrão se omitido)
+web:
+  vault_root: "~/obsidian"   # subpastas imediatas aparecem como "espaços" na home
+```
+
+"Abrir pasta existente" na home aceita qualquer caminho absoluto, sem se restringir a
+`vault_root` — mesma flexibilidade que `--pasta` já tem na CLI.
+
+### O que cada aba faz
+
+| Aba | Equivalente na CLI |
+|---|---|
+| 📚 Buscar Fontes | `buscar_fontes.py` |
+| ⚡ Gerar Conteúdo | `main.py` (modo `agent`), com checkboxes pra escolher quais dos 5 outputs opcionais (html, canvas, flashcards, quiz, mapa mental) gerar nessa execução |
+| 💬 Chat | `main.py --chat`, com troca QA ↔ Socrático |
+
+### Limitações conhecidas
+
+- Sem streaming de token a token no chat (resposta vem completa, com indicador de "pensando...") — `src/llm.py` não suporta streaming de tokens hoje, na CLI nem na web
+- Jobs de geração/busca de fontes rodam em memória (thread); se o servidor reiniciar no meio de um job, ele é perdido (mesmo custo de fechar um terminal com uma run de CLI em andamento)
+- Histórico do chat não persiste entre reloads de página (gerenciado só no JS da página, sem sessão no servidor)
+
+---
+
 ## Tipos de fonte aceitos
 
 | Tipo | Exemplos | Como é processado |
@@ -344,13 +390,31 @@ agente-estudos/
     │   ├── rag.py             # search_vault — busca semântica nos materiais indexados
     │   └── video.py           # yt-dlp + Whisper
     ├── chat.py                # Chat interativo (QA + Socrático) — RAG via search_vault
+    ├── postprocessing.py      # Flashcards/quiz/próximos-passos/mapa-mental compartilhado (agent + pipeline + web)
     └── generators/
         ├── content.py         # Arquivos .md com 3 níveis de profundidade
         ├── canvas.py          # Canvas Obsidian
         ├── html_gen.py        # HTML (Catppuccin Mocha) com tabs de profundidade
         ├── flashcards.py      # Flashcards SM-2 (gerado automaticamente)
         ├── quiz.py            # Quiz MCQ (gerado automaticamente)
-        └── next_steps.py      # Recomendações pós-estudo (gerado automaticamente)
+        ├── next_steps.py      # Recomendações pós-estudo (gerado automaticamente)
+        └── visual_map.py      # Mapa mental radial (Catppuccin Mocha)
+```
+
+```
+web/                            # Interface web estudAI — uvicorn web.app:app --reload
+├── app.py                      # App FastAPI (monta static/, inclui routers)
+├── deps.py                     # Config loader + modelo de "espaços" (sem banco)
+├── jobs.py                     # JobManager em memória (threading) p/ operações longas
+├── schemas.py                  # Modelos Pydantic dos payloads
+├── markdown_render.py          # .md -> HTML (markdown-it-py) + wikilinks Obsidian
+├── routers/
+│   ├── spaces.py               # Home, workspace, árvore de arquivos, leitura de arquivo
+│   ├── generation.py           # Geração de conteúdo (toggles) via job
+│   ├── sources.py              # Busca de fontes via job
+│   └── chat.py                 # Chat RAG síncrono
+├── templates/                  # Jinja2 (base/home/workspace + partials/file_tree)
+└── static/                     # css/theme.css + js/ (vanilla, sem build step)
 ```
 
 ## Ferramentas disponíveis para o agente
@@ -464,6 +528,8 @@ O repositório inclui `.vscode/tasks.json` e `.vscode/launch.json` com atalhos d
 - `rich` + `typer` — CLI e progress display
 - `PyYAML` — leitura de config.yaml
 - `python-dotenv` — suporte a .env (opcional)
+- `fastapi` + `uvicorn` + `jinja2` + `python-multipart` — interface web estudAI (`uvicorn web.app:app`)
+- `markdown-it-py` — conversão .md → HTML na interface web
 
 ## Licença
 

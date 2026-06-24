@@ -1,0 +1,39 @@
+/* estudAI — ajustes estruturais que o Tailwind via CDN não cobre direto.
+   A paleta de cores fica em base.html (tailwind.config) — única fonte de verdade. */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #11131c; }
+::-webkit-scrollbar-thumb { background: #1f2333; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #262b3d; }
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr 380px;
+  height: calc(100vh - 56px);
+}
+
+@media (max-width: 1024px) {
+  .workspace-grid { grid-template-columns: 220px 1fr 320px; }
+}
+
+.tree-node summary {
+  cursor: pointer;
+  list-style: none;
+}
+.tree-node summary::-webkit-details-marker { display: none; }
+
+.markdown-body h1 { color: #e6e8f0; font-size: 1.6rem; font-weight: 700; margin-bottom: .4rem; }
+.markdown-body h2 { color: #c9c2ff; font-size: 1.15rem; font-weight: 600; margin: 1.4rem 0 .5rem; border-left: 3px solid #7c5cff; padding-left: .6rem; }
+.markdown-body h3 { color: #34e1c8; font-size: 1rem; font-weight: 600; margin: 1.1rem 0 .4rem; }
+.markdown-body p { line-height: 1.7; margin-bottom: .8rem; color: #d3d6e0; }
+.markdown-body blockquote { background: #171a26; border-left: 4px solid #34e1c8; border-radius: 0 .5rem .5rem 0; padding: .7rem 1rem; margin: .8rem 0; color: #9aa0b4; font-style: italic; }
+.markdown-body pre { background: #0b0d14; border: 1px solid #262b3d; border-radius: .5rem; padding: 1rem; overflow-x: auto; margin: .8rem 0; }
+.markdown-body code { font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: .85rem; color: #34e1c8; }
+.markdown-body p code, .markdown-body li code { background: #171a26; padding: .1rem .35rem; border-radius: .25rem; }
+.markdown-body table { width: 100%; border-collapse: collapse; margin: .8rem 0; font-size: .9rem; }
+.markdown-body th { background: #1f2333; color: #c9c2ff; padding: .5rem .7rem; text-align: left; }
+.markdown-body td { padding: .4rem .7rem; border-bottom: 1px solid #262b3d; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.4rem; margin-bottom: .8rem; }
+.markdown-body strong { color: #f5b95c; }
+.markdown-body a.wikilink { color: #7c5cff; text-decoration: underline dotted; }
+.markdown-body a.wikilink:hover { color: #9176ff; }

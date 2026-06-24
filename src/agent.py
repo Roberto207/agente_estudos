@@ -8,6 +8,7 @@ Sem sequência fixa — comportamento genuinamente agentico.
 from __future__ import annotations
 import os
 from pathlib import Path
+from typing import Callable
 
 from rich.console import Console
 from rich.panel import Panel
@@ -17,6 +18,7 @@ from rich.text import Text
 
 from .llm import LLMClient, AgentResponse
 from .tools.registry import get_tools_for_provider, execute_tools_batch
+from .postprocessing import run_postprocessing
 
 MAX_ITERATIONS = 60
 
@@ -33,22 +35,26 @@ _CREATION_TOOLS = {
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
+# HTML, canvas, flashcards, quiz, próximos-passos e mapa mental são TODOS gerados
+# deterministicamente em pós-processamento (src/postprocessing.py), não pelo LLM —
+# pedir pro modelo redigir documentos grandes (HTML/JSON) via tool call é frágil:
+# modelos mais fracos (ex: gpt-4o-mini) já produziram HTML com `\n` literal em vez
+# de quebra de linha real, ou simplesmente pularam o canvas. O LLM só cuida de
+# pesquisar, processar fontes e escrever markdown — o resto é Python confiável.
 _SYSTEM = """\
 Você é um agente especialista em criar estruturas de estudo de alta qualidade no vault Obsidian.
 Seu objetivo é produzir uma pasta de estudos completa e navegável a partir do tema e fontes fornecidos.
 
 ## Produto Final Esperado
 
-Ao finalizar, a pasta destino deve conter:
+Seu trabalho é produzir:
 - Subpastas temáticas com arquivos .md ricos (fundamentos/, avancado/, aplicacoes/, etc)
 - `transcripts/` com os resumos de cada fonte processada
 - `guia_de_estudos.md` com ordem de leitura recomendada
-- Dois arquivos `.canvas` (fundamentos e avançado) para Obsidian
-- `html/index.html` e HTMLs individuais (Catppuccin Mocha, sem dependências externas)
 
-NOTA: Após sua execução, o sistema gerará automaticamente `html/flashcards.html` e `html/quiz.html`.
-Portanto, no `index.html` e na sidebar de cada HTML, inclua os links:
-  `<a href="flashcards.html">🃏 Flashcards</a>` e `<a href="quiz.html">📝 Quiz</a>`
+NOTA: Você NÃO precisa gerar HTML, canvas (.canvas), flashcards, quiz ou mapa mental — o
+sistema gera tudo isso automaticamente e de forma confiável a partir dos seus arquivos .md,
+depois que você terminar. Não tente criar esses arquivos.
 
 ## Padrão de Qualidade dos Arquivos .md
 
@@ -86,47 +92,14 @@ Conteúdo profundo e didático com tabelas, blocos de código e exemplos.
 Os três níveis (TL;DR, Resumo, Conteúdo Completo) permitem ao estudante escolher a profundidade.
 O HTML gerado pelo sistema apresentará tabs "⚡ Rápido / 📖 Médio / 📚 Completo" automaticamente.
 
-## Padrão do Canvas Obsidian
-
-```json
-{
-  "nodes": [
-    {"id": "txt_intro", "type": "text", "text": "# Tema — Canvas\\n...", "x": -1200, "y": -100, "width": 340, "height": 140},
-    {"id": "file_1", "type": "file", "file": "<caminho_relativo_ao_vault>", "x": -780, "y": -380, "width": 520, "height": 400}
-  ],
-  "edges": [
-    {"id": "e1", "fromNode": "file_1", "fromSide": "bottom", "toNode": "file_2", "toSide": "top"}
-  ]
-}
-```
-
-Os `file` nodes devem usar caminhos **relativos à raiz do vault**.
-
-## Padrão HTML (Catppuccin Mocha)
-
-Paleta obrigatória em todos os HTMLs:
-```css
-:root {
-  --base:#1e1e2e; --mantle:#181825; --crust:#11111b; --surface0:#313244;
-  --surface1:#45475a; --overlay0:#6c7086; --text:#cdd6f4; --subtext:#a6adc8;
-  --purple:#cba6f7; --blue:#89b4fa; --green:#a6e3a1; --yellow:#f9e2af;
-  --red:#f38ba8; --teal:#94e2d5;
-}
-```
-
-- `index.html`: sidebar com todos os arquivos por subpasta + links para Flashcards e Quiz, cards de tópicos
-- HTMLs individuais: conversão fiel do .md com mesma sidebar e footer de navegação
-
 ## Processo Recomendado
 
-1. Crie a estrutura de pastas (`transcripts/`, `html/`, subpastas temáticas)
+1. Crie a estrutura de pastas (`transcripts/`, subpastas temáticas)
 2. Processe cada fonte fornecida (`transcribe_video` para vídeos, `fetch_url` para artigos/papers, `web_search` para nomes de livros/cursos)
 3. Planeje a estrutura de arquivos com base no conteúdo extraído + tema + foco
 4. Para cada tópico, use `web_search` para pesquisa complementar
 5. Escreva os arquivos .md com `write_file` — conteúdo rico, profundo, com os três níveis (TL;DR / Resumo / Conteúdo Completo)
-6. Crie os canvas files (.canvas são JSON)
-7. Crie o guia_de_estudos.md
-8. Gere todos os HTMLs (incluindo links para flashcards.html e quiz.html)
+6. Crie o guia_de_estudos.md
 
 Processe fontes do mesmo tipo em paralelo quando possível.
 Adapte a profundidade e linguagem à didática solicitada.
@@ -143,9 +116,17 @@ def run(
     didatica: str,
     pasta: str,
     fontes: list[str],
+    on_event: Callable[[str, dict], None] | None = None,
+    outputs: dict | None = None,
 ) -> None:
+    """`on_event(event_type, payload)` e `outputs` (toggles de canvas/html/
+    flashcards/quiz/mapa_mental) são opcionais e aditivos — chamadas existentes
+    sem esses parâmetros mantêm o comportamento de hoje inalterado.
+    """
+    emit = on_event or (lambda *a, **k: None)
     llm = LLMClient(config)
     provider = config.get("provider", "anthropic")
+    system = _SYSTEM
 
     console.print(Panel(
         f"[bold purple]Agente Estudos[/bold purple] [dim](modo agentico)[/dim]\n"
@@ -168,6 +149,7 @@ def run(
     try:
         while iteration < MAX_ITERATIONS:
             iteration += 1
+            emit("iteration_start", {"iteration": iteration})
 
             with Live(
                 Spinner("dots", text=Text(f"[Iteração {iteration}] LLM pensando...", style="yellow")),
@@ -177,7 +159,7 @@ def run(
                 resp: AgentResponse = llm.chat_with_tools(
                     messages=messages,
                     tools=tools,
-                    system=_SYSTEM,
+                    system=system,
                 )
 
             if resp.stop_reason == "end_turn" or not resp.tool_calls:
@@ -187,10 +169,12 @@ def run(
                         title="[green]Agente Finalizado[/green]",
                         border_style="green",
                     ))
+                emit("agent_finished", {"content": resp.content})
                 break
 
             # Exibe e executa as tool calls
             _print_tool_calls(resp.tool_calls, iteration)
+            emit("tool_calls", {"iteration": iteration, "calls": resp.tool_calls})
             results = execute_tools_batch(resp.tool_calls, config)
             total_tool_calls += len(resp.tool_calls)
 
@@ -233,7 +217,7 @@ def run(
         f"\n[dim]Total de chamadas de ferramentas: {total_tool_calls} em {iteration} iterações[/dim]"
     )
 
-    _run_postprocessing(llm, pasta)
+    run_postprocessing(llm, pasta, tema=tema, foco=foco, on_event=on_event, outputs=outputs)
 
     index_path = os.path.join(pasta, "html", "index.html")
     if Path(index_path).exists():
@@ -272,45 +256,6 @@ def _print_tool_calls(tool_calls: list[dict], iteration: int) -> None:
             f"{k}={str(v)[:60]!r}" for k, v in inputs.items()
         )
         console.print(f"  [cyan]→ {name}[/cyan]({summary})")
-
-
-def _run_postprocessing(llm, pasta: str) -> None:
-    """Gera flashcards, quiz e próximos passos após o loop do agente."""
-    from .generators.flashcards import generate as gen_flashcards
-    from .generators.quiz import generate as gen_quiz
-    from .generators.next_steps import generate as gen_next_steps
-
-    console.print("\n[bold purple]Pós-processamento[/bold purple]")
-
-    try:
-        with console.status("[yellow]Gerando flashcards (SM-2)...[/yellow]"):
-            fc_path = gen_flashcards(llm, pasta)
-        if fc_path:
-            console.print(f"  [green]✓[/green] Flashcards: {fc_path}")
-        else:
-            console.print("  [dim]Flashcards: sem conteúdo suficiente[/dim]")
-    except Exception as exc:
-        console.print(f"  [dim]Flashcards: falhou ({exc})[/dim]")
-
-    try:
-        with console.status("[yellow]Gerando quiz...[/yellow]"):
-            quiz_path = gen_quiz(llm, pasta)
-        if quiz_path:
-            console.print(f"  [green]✓[/green] Quiz: {quiz_path}")
-        else:
-            console.print("  [dim]Quiz: sem conteúdo suficiente[/dim]")
-    except Exception as exc:
-        console.print(f"  [dim]Quiz: falhou ({exc})[/dim]")
-
-    try:
-        with console.status("[yellow]Gerando recomendações de próximos passos...[/yellow]"):
-            ns_path = gen_next_steps(llm, pasta)
-        if ns_path:
-            console.print(f"  [green]✓[/green] Próximos passos: {ns_path}")
-        else:
-            console.print("  [dim]Próximos passos: sem conteúdo suficiente[/dim]")
-    except Exception as exc:
-        console.print(f"  [dim]Próximos passos: falhou ({exc})[/dim]")
 
 
 class ToolsNotSupportedError(Exception):

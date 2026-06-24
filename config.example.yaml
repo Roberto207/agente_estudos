@@ -58,6 +58,12 @@ embedding:
     api_key: ""
     model: "voyage-3-lite"
 
+# ── Web (estudAI) ──────────────────────────────────────────────
+# Subpastas imediatas de vault_root aparecem como "espaços" na home do frontend web.
+# Não restringe nada — "Abrir pasta existente" aceita qualquer caminho absoluto.
+web:
+  vault_root: "~/obsidian"
+
 # ── Descoberta de Fontes (buscar_fontes.py) ───────────────────
 # Todos os campos são opcionais — o sistema funciona sem eles.
 # github_token: aumenta rate limit da API do GitHub (60→5000 req/hora)

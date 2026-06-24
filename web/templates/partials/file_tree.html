@@ -1,0 +1,23 @@
+{% macro render_tree(nodes) %}
+<ul class="pl-2">
+  {% for node in nodes %}
+  <li>
+    {% if node.type == "dir" %}
+    <details class="tree-node" open>
+      <summary class="text-secondary text-sm py-1 px-1 rounded hover:bg-surface2 flex items-center gap-1.5">
+        <span class="text-muted">📁</span> {{ node.name }}
+      </summary>
+      <div class="ml-3 border-l border-edge pl-1">
+        {{ render_tree(node.children) }}
+      </div>
+    </details>
+    {% else %}
+    <button type="button" data-path="{{ node.path }}"
+            class="file-link w-full text-left text-sm py-1 px-2 rounded hover:bg-surface2 hover:text-primary text-secondary truncate block">
+      {{ node.name }}
+    </button>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
