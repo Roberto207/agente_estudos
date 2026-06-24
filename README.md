@@ -178,9 +178,14 @@ python main.py \
   --pasta ~/obsidian/algoritmos
 ```
 
-### Chat sobre o conteúdo
+### Chat sobre o conteúdo (RAG real — busca semântica)
 
-Depois de gerar uma pasta de estudos, abra um chat interativo sobre o material:
+Depois de gerar uma pasta de estudos, abra um chat interativo sobre o material. Na primeira
+execução (e sempre que arquivos novos/alterados forem detectados pelo mtime), o sistema indexa
+os `.md` da pasta em chunks com embeddings, cacheados em `<pasta>/.rag_index.json`. A cada
+pergunta, o LLM decide por conta própria quantas vezes chamar a tool `search_vault` (busca por
+similaridade de embeddings) antes de responder — não é mais um dump de todos os arquivos no
+prompt, é busca real, como o NotebookLM ou a busca web do Claude.
 
 ```bash
 # Q&A direto (estilo NotebookLM — cita a fonte de cada resposta)
@@ -188,6 +193,9 @@ python main.py --chat --pasta ~/obsidian/redes_neurais
 
 # Tutor Socrático (nunca dá a resposta direta, faz perguntas)
 python main.py --chat --pasta ~/obsidian/redes_neurais --chat-mode socratico
+
+# Funciona igual apontando pra raiz do vault inteiro — pergunta através de tudo que você já estudou
+python main.py --chat --pasta ~/obsidian
 ```
 
 Dentro do chat, os comandos disponíveis são:
@@ -289,6 +297,27 @@ source_discovery:
   min_github_stars: 100     # estrelas mínimas para repositórios GitHub
 ```
 
+## Configuração de Embeddings (busca semântica do --chat)
+
+```yaml
+# config.yaml
+embedding:
+  provider: ollama   # ollama (local, sem custo) | openai | voyage
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "nomic-embed-text"   # bge-m3 (melhor em PT-BR) | all-minilm (menor)
+  openai:
+    api_key: ""                  # vazio = usa openai.api_key
+    model: "text-embedding-3-small"
+  voyage:
+    api_key: ""
+    model: "voyage-3-lite"
+```
+
+O `provider` de embedding é independente do `provider` de LLM do chat — você pode conversar via
+Anthropic/Groq e indexar via Ollama local, por exemplo. Trocar de provider/modelo de embedding
+força reindexação completa da pasta (vetores de modelos diferentes não são comparáveis).
+
 ---
 
 ## Estrutura do projeto
@@ -307,12 +336,14 @@ agente-estudos/
     ├── pipeline.py            # Pipeline legado de 8 fases
     ├── distiller.py           # Processamento de fontes (YouTube, GitHub, papers, artigos)
     ├── source_discovery.py    # Descoberta e curadoria automática de fontes
+    ├── indexer.py             # Chunking + embeddings + índice incremental (RAG)
     ├── tools/
     │   ├── registry.py        # Definições das ferramentas + executor
     │   ├── files.py           # Ferramentas de filesystem
     │   ├── web.py             # WebFetch + DuckDuckGo search
+    │   ├── rag.py             # search_vault — busca semântica nos materiais indexados
     │   └── video.py           # yt-dlp + Whisper
-    ├── chat.py                # Chat interativo (QA + Socrático)
+    ├── chat.py                # Chat interativo (QA + Socrático) — RAG via search_vault
     └── generators/
         ├── content.py         # Arquivos .md com 3 níveis de profundidade
         ├── canvas.py          # Canvas Obsidian
@@ -338,6 +369,9 @@ No modo `agent`, o LLM pode chamar:
 | `read_file` | Lê arquivo existente |
 | `create_directory` | Cria pasta |
 | `list_directory` | Lista conteúdo de pasta |
+
+No modo `--chat`, o LLM tem acesso só à tool `search_vault` (busca semântica nos materiais já
+indexados) — não escreve nem lê arquivos arbitrários durante a conversa.
 
 ---
 

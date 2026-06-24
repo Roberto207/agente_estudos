@@ -29,3 +29,4 @@ build/
 *.log
 *.tmp
 /transcripts/
+/specs/

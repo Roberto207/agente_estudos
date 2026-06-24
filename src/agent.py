@@ -22,6 +22,14 @@ MAX_ITERATIONS = 60
 
 console = Console()
 
+# search_vault é exclusiva do --chat (precisa de uma pasta já indexada na sessão);
+# não faz sentido no modo de criação.
+_CREATION_TOOLS = {
+    "web_search", "fetch_url", "transcribe_video", "write_file", "read_file",
+    "create_directory", "list_directory", "search_sources", "fetch_github_content",
+    "recommend_next_steps",
+}
+
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
@@ -150,7 +158,7 @@ def run(
         border_style="purple",
     ))
 
-    tools = get_tools_for_provider(provider)
+    tools = get_tools_for_provider(provider, names=_CREATION_TOOLS)
     user_message = _build_task(tema, foco, didatica, pasta, fontes)
     messages: list[dict] = [{"role": "user", "content": user_message}]
 

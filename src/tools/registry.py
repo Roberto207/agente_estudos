@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .web import web_search as _web_search, fetch_url as _fetch_url
 from .files import write_file, read_file, create_directory, list_directory
+from .rag import search_vault as _search_vault
 
 
 # ── Schemas das ferramentas ───────────────────────────────────────────────────
@@ -187,6 +188,31 @@ _TOOL_DEFS = [
         },
     },
     {
+        "name": "search_vault",
+        "description": (
+            "Busca semântica (embeddings) nos materiais de estudo já indexados. "
+            "Use para encontrar os trechos mais relevantes antes de responder a uma pergunta. "
+            "Pode ser chamada várias vezes com queries diferentes para reunir contexto suficiente "
+            "(ex: termos técnicos específicos em vez da pergunta inteira). "
+            "Retorna os trechos mais relevantes com a fonte (arquivo e seção) de cada um."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Pergunta ou termo de busca"
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "Número de trechos a retornar (padrão: 5)",
+                    "default": 5
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "recommend_next_steps",
         "description": (
             "Analisa os materiais de estudo em uma pasta e gera proximos_passos.md com: "
@@ -211,9 +237,9 @@ _TOOL_DEFS = [
 
 # ── Conversores de formato ────────────────────────────────────────────────────
 
-def to_anthropic_tools() -> list[dict]:
+def to_anthropic_tools(defs: list[dict] | None = None) -> list[dict]:
     result = []
-    for t in _TOOL_DEFS:
+    for t in defs if defs is not None else _TOOL_DEFS:
         result.append({
             "name": t["name"],
             "description": t["description"],
@@ -222,9 +248,9 @@ def to_anthropic_tools() -> list[dict]:
     return result
 
 
-def to_openai_tools() -> list[dict]:
+def to_openai_tools(defs: list[dict] | None = None) -> list[dict]:
     result = []
-    for t in _TOOL_DEFS:
+    for t in defs if defs is not None else _TOOL_DEFS:
         result.append({
             "type": "function",
             "function": {
@@ -236,10 +262,12 @@ def to_openai_tools() -> list[dict]:
     return result
 
 
-def get_tools_for_provider(provider: str) -> list[dict]:
+def get_tools_for_provider(provider: str, names: set[str] | None = None) -> list[dict]:
+    """names: se fornecido, restringe o conjunto de tools expostas (ex: chat.py só expõe search_vault)."""
+    defs = _TOOL_DEFS if names is None else [t for t in _TOOL_DEFS if t["name"] in names]
     if provider == "anthropic":
-        return to_anthropic_tools()
-    return to_openai_tools()
+        return to_anthropic_tools(defs)
+    return to_openai_tools(defs)
 
 
 # ── Executor ──────────────────────────────────────────────────────────────────
@@ -273,6 +301,9 @@ def execute_tool(name: str, inputs: dict, config: dict) -> str:
 
         if name == "list_directory":
             return list_directory(inputs["path"])
+
+        if name == "search_vault":
+            return _search_vault(inputs["query"], inputs.get("k", 5), config.get("_rag_pasta", ""), config)
 
         if name == "search_sources":
             return _search_sources_tool(inputs, config)

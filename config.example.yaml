@@ -41,6 +41,23 @@ transcription:
 search:
   max_results: 5                     # resultados por query de pesquisa
 
+# ── Embeddings (busca semântica do --chat) ────────────────────
+# Provider usado para indexar e buscar nos materiais de estudo (tool search_vault).
+# ollama: local, sem custo — requer `ollama pull nomic-embed-text` (ou bge-m3 para PT-BR)
+# openai: API, usa openai.api_key acima se "api_key" abaixo ficar vazio
+# voyage: API (voyageai.com), barato e boa qualidade multilíngue
+embedding:
+  provider: ollama
+  ollama:
+    base_url: "http://localhost:11434"   # mesmo valor de ollama.base_url acima, se já usa Ollama
+    model: "nomic-embed-text"             # bge-m3 (melhor em PT-BR, ~1.2GB) | all-minilm (menor, ~46MB)
+  openai:
+    api_key: ""                           # deixe vazio para usar openai.api_key acima
+    model: "text-embedding-3-small"
+  voyage:
+    api_key: ""
+    model: "voyage-3-lite"
+
 # ── Descoberta de Fontes (buscar_fontes.py) ───────────────────
 # Todos os campos são opcionais — o sistema funciona sem eles.
 # github_token: aumenta rate limit da API do GitHub (60→5000 req/hora)
