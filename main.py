@@ -72,7 +72,8 @@ def main(
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
     config_path: str = typer.Option("", "--config", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
-    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado)"),
+    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas/html/mapa mental sobre pasta existente)"),
+    apenas: list[str] = typer.Option([], "--apenas", "-a", help="Restringe outputs no modo postprocess (repita: --apenas quiz --apenas flashcards). Vazio = todos."),
     chat: bool = typer.Option(False, "--chat", "-c", help="Abre chat interativo sobre a pasta de estudos"),
     chat_mode: str = typer.Option("qa", "--chat-mode", help="Modo do chat: qa (NotebookLM) | socratico"),
 ):
@@ -91,12 +92,20 @@ def main(
         return
 
     # ── Modo geração ─────────────────────────────────────────────────────────
-    if interactive or not tema:
+    if interactive or (mode != "postprocess" and not tema):
         tema, foco, didatica, pasta, fontes = _interactive_prompt(tema, foco, didatica, pasta, fontes)
 
-    _validate_inputs(tema, pasta, config)
+    _validate_inputs(tema, pasta, config, mode=mode)
 
     pasta = str(Path(pasta).expanduser().resolve())
+
+    if mode == "postprocess":
+        from src.llm import LLMClient
+        from src.postprocessing import run_postprocessing, OUTPUT_KEYS
+        llm = LLMClient(config)
+        outputs = {k: (k in apenas) for k in OUTPUT_KEYS} if apenas else None
+        run_postprocessing(llm, pasta, tema=tema, foco=foco, outputs=outputs)
+        return
 
     if mode == "pipeline":
         from src.pipeline import run
@@ -192,9 +201,9 @@ def _config_from_env() -> dict:
 
 # ── Validação ──────────────────────────────────────────────────────────────────
 
-def _validate_inputs(tema: str, pasta: str, config: dict) -> None:
+def _validate_inputs(tema: str, pasta: str, config: dict, mode: str = "agent") -> None:
     errors = []
-    if not tema.strip():
+    if mode != "postprocess" and not tema.strip():
         errors.append("--tema é obrigatório")
     if not pasta.strip():
         errors.append("--pasta é obrigatório")

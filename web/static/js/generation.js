@@ -3,6 +3,7 @@
   const spaceId = root.dataset.spaceId;
   const form = document.getElementById("gen-form");
   const submitBtn = document.getElementById("gen-submit");
+  const postprocessBtn = document.getElementById("gen-submit-postprocess");
   const logEl = document.getElementById("gen-log");
 
   function appendLog(line) {
@@ -27,7 +28,14 @@
     }
   }
 
-  async function pollJob(jobId) {
+  function describeDone(job) {
+    if (job.result && Array.isArray(job.result.arquivos_md)) {
+      return `✓ Concluído — ${job.result.arquivos_md.length} arquivo(s) .md`;
+    }
+    return "✓ Pós-processamento concluído.";
+  }
+
+  async function pollJob(jobId, { button, idleText }) {
     let seen = 0;
     while (true) {
       const job = await EstudAI.api.get(`/api/jobs/${jobId}`);
@@ -35,16 +43,16 @@
         appendLog(describeEvent(job.events[seen]));
       }
       if (job.status === "done") {
-        appendLog(`✓ Concluído — ${job.result.arquivos_md.length} arquivo(s) .md`);
+        appendLog(describeDone(job));
         await window.EstudAI.refreshTree();
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Gerar conteúdo";
+        button.disabled = false;
+        button.textContent = idleText;
         return;
       }
       if (job.status === "error") {
         appendLog(`✗ Erro: ${job.error}`);
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Gerar conteúdo";
+        button.disabled = false;
+        button.textContent = idleText;
         return;
       }
       await new Promise((r) => setTimeout(r, 1500));
@@ -81,11 +89,40 @@
     try {
       const { job_id } = await EstudAI.api.post(`/api/spaces/${spaceId}/generate`, body);
       appendLog("Job iniciado...");
-      await pollJob(job_id);
+      await pollJob(job_id, { button: submitBtn, idleText: "Gerar conteúdo" });
     } catch (err) {
       appendLog(`✗ Erro ao iniciar: ${err.message}`);
       submitBtn.disabled = false;
       submitBtn.textContent = "Gerar conteúdo";
+    }
+  });
+
+  const POSTPROCESS_IDLE_TEXT = "Apenas regenerar ferramentas (sem tema/fontes)";
+
+  postprocessBtn.addEventListener("click", async () => {
+    const body = {
+      outputs: {
+        html: form.output_html.checked,
+        canvas: form.output_canvas.checked,
+        flashcards: form.output_flashcards.checked,
+        quiz: form.output_quiz.checked,
+        mapa_mental: form.output_mapa_mental.checked,
+        next_steps: form.output_next_steps.checked,
+      },
+    };
+
+    logEl.innerHTML = "";
+    postprocessBtn.disabled = true;
+    postprocessBtn.textContent = "Regenerando...";
+
+    try {
+      const { job_id } = await EstudAI.api.post(`/api/spaces/${spaceId}/postprocess`, body);
+      appendLog("Job iniciado...");
+      await pollJob(job_id, { button: postprocessBtn, idleText: POSTPROCESS_IDLE_TEXT });
+    } catch (err) {
+      appendLog(`✗ Erro ao iniciar: ${err.message}`);
+      postprocessBtn.disabled = false;
+      postprocessBtn.textContent = POSTPROCESS_IDLE_TEXT;
     }
   });
 })();

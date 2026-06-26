@@ -28,6 +28,8 @@ _DEFAULT_OUTPUTS = {
     "canvas": True, "html": True, "mapa_mental": False,
 }
 
+OUTPUT_KEYS = tuple(_DEFAULT_OUTPUTS.keys())
+
 
 def build_structure_from_folder(pasta: str) -> dict:
     """Reconstrói um dict de structure ({"subfolders": [...]}) a partir do que já

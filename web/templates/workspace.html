@@ -64,7 +64,7 @@
         <form id="gen-form" class="space-y-3 text-sm">
           <div>
             <label class="text-secondary text-xs block mb-1">Tema</label>
-            <input name="tema" required class="w-full bg-surface2 border border-edge rounded-lg px-3 py-2 outline-none focus:border-accent">
+            <input name="tema" class="w-full bg-surface2 border border-edge rounded-lg px-3 py-2 outline-none focus:border-accent">
           </div>
           <div>
             <label class="text-secondary text-xs block mb-1">Foco</label>
@@ -94,6 +94,10 @@
           <button type="submit" id="gen-submit"
                   class="w-full py-2 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium">
             Gerar conteúdo
+          </button>
+          <button type="button" id="gen-submit-postprocess"
+                  class="w-full py-2 rounded-lg border border-accent text-accent hover:bg-surface2 text-sm font-medium">
+            Apenas regenerar ferramentas (sem tema/fontes)
           </button>
         </form>
         <div id="gen-log" class="mt-4 space-y-1 text-xs font-mono hidden"></div>

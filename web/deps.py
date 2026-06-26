@@ -14,8 +14,14 @@ import yaml
 
 DEFAULT_VAULT_ROOT = "~/obsidian"
 
-# Subpastas que são saída do pipeline, não "conteúdo navegável" no sentido de espaço.
-_NON_CONTENT_DIRS = {"transcripts", "html", ".obsidian", ".rag_index.json"}
+# Subpastas que são saída do pipeline ou dependências pesadas de projetos de
+# código — não são "conteúdo navegável" no sentido de espaço de estudo, e
+# percorrê-las (ex: um venv com dezenas de milhares de arquivos) deixa
+# build_tree lento ao abrir pastas fora do vault Obsidian.
+_NON_CONTENT_DIRS = {
+    "transcripts", "html", ".obsidian", ".rag_index.json",
+    "node_modules", "venv", "__pycache__", "dist", "build", ".git",
+}
 
 
 # ── Config ──────────────────────────────────────────────────────────────────────
@@ -121,11 +127,13 @@ def _walk(current: Path, root: Path) -> list[dict]:
     nodes = []
     try:
         entries = sorted(current.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         return []
 
     for entry in entries:
         if entry.name.startswith("."):
+            continue
+        if entry.is_dir() and entry.name in _NON_CONTENT_DIRS:
             continue
         rel = str(entry.relative_to(root))
         if entry.is_dir():

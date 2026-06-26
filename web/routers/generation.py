@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from .. import deps
 from ..jobs import job_manager
-from ..schemas import GenerateRequest, JobStatusOut
+from ..schemas import GenerateRequest, JobStatusOut, OutputsToggle
 
 router = APIRouter()
 
@@ -34,6 +34,16 @@ def _generate_target(
     return {"pasta": pasta, "arquivos_md": md_files}
 
 
+def _postprocess_target(config: dict, pasta: str, outputs: dict, on_event) -> dict:
+    """Roda só o pós-processamento (flashcards/quiz/canvas/html/...) sobre uma
+    pasta já existente, sem passar pelo agente completo."""
+    from src.llm import LLMClient
+    from src.postprocessing import run_postprocessing
+
+    llm = LLMClient(config)
+    return run_postprocessing(llm, pasta, outputs=outputs, on_event=on_event)
+
+
 @router.post("/api/spaces/{space_id}/generate")
 def api_generate(space_id: str, body: GenerateRequest):
     try:
@@ -52,6 +62,21 @@ def api_generate(space_id: str, body: GenerateRequest):
         pasta=str(space_path),
         fontes=body.fontes,
         outputs=body.outputs.model_dump(),
+    )
+    return {"job_id": job_id}
+
+
+@router.post("/api/spaces/{space_id}/postprocess")
+def api_postprocess(space_id: str, body: OutputsToggle):
+    try:
+        space_path = deps.resolve_space_path(space_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "Espaço não encontrado")
+
+    config = deps.load_config()
+    job_id = job_manager.start(
+        "postprocess", _postprocess_target,
+        config=config, pasta=str(space_path), outputs=body.model_dump(),
     )
     return {"job_id": job_id}
 

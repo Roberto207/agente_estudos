@@ -33,7 +33,11 @@ def workspace(request: Request, space_id: str):
     except FileNotFoundError:
         raise HTTPException(404, "Espaço não encontrado")
 
-    tree = deps.build_tree(space_path)
+    try:
+        tree = deps.build_tree(space_path)
+    except Exception as exc:
+        raise HTTPException(500, f"Falha ao ler a árvore de arquivos de '{space_path}': {exc}")
+
     return templates.TemplateResponse(request, "workspace.html", {
         "space_id": space_id,
         "space_name": space_path.name,
