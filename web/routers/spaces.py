@@ -1,5 +1,8 @@
 """Páginas (home, workspace) + API de espaços/árvore/arquivo."""
 from __future__ import annotations
+import re
+from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -88,7 +91,11 @@ def api_hide_space(space_id: str):
 
 @router.get("/api/spaces/{space_id}/raw-file")
 def api_raw_file(space_id: str, path: str):
-    """Serve o arquivo com Content-Type correto — usado para renderizar HTMLs em iframe."""
+    """Serve o arquivo com Content-Type correto.
+
+    Para HTMLs, reescreve hrefs relativos (links entre páginas do mesmo site)
+    para passarem pelo mesmo endpoint, mantendo a navegação funcional no iframe.
+    """
     try:
         space_path = deps.resolve_space_path(space_id)
         file_path = deps.read_space_file(space_path, path)
@@ -97,10 +104,22 @@ def api_raw_file(space_id: str, path: str):
     except PermissionError:
         raise HTTPException(403, "Path inválido")
 
-    content = file_path.read_bytes()
-    suffix = file_path.suffix.lower()
-    media_type = "text/html" if suffix == ".html" else "text/plain"
-    return Response(content=content, media_type=media_type)
+    if file_path.suffix.lower() != ".html":
+        return Response(content=file_path.read_bytes(), media_type="text/plain")
+
+    dir_prefix = str(Path(path).parent)
+    if dir_prefix == ".":
+        dir_prefix = ""
+
+    def _rewrite(m: re.Match) -> str:
+        href = m.group(1)
+        if href.startswith(("#", "http://", "https://", "/")):
+            return m.group(0)
+        new_path = f"{dir_prefix}/{href}".lstrip("/") if dir_prefix else href
+        return f'href="/api/spaces/{space_id}/raw-file?path={quote(new_path)}"'
+
+    content = re.sub(r'href="([^"]*)"', _rewrite, file_path.read_text(encoding="utf-8"))
+    return Response(content=content.encode("utf-8"), media_type="text/html")
 
 
 @router.get("/api/spaces/{space_id}/file")
