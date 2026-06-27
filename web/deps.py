@@ -6,6 +6,7 @@ dentro dela, como hoje); não há nenhum estado a sincronizar com um banco exter
 """
 from __future__ import annotations
 import base64
+import json
 import os
 import re
 from pathlib import Path
@@ -14,12 +15,15 @@ import yaml
 
 DEFAULT_VAULT_ROOT = "~/obsidian"
 
+_SPACES_REGISTRY = Path.home() / ".estudai_spaces.json"
+_HIDDEN_SPACES_FILE = Path.home() / ".estudai_hidden.json"
+
 # Subpastas que são saída do pipeline ou dependências pesadas de projetos de
 # código — não são "conteúdo navegável" no sentido de espaço de estudo, e
 # percorrê-las (ex: um venv com dezenas de milhares de arquivos) deixa
 # build_tree lento ao abrir pastas fora do vault Obsidian.
 _NON_CONTENT_DIRS = {
-    "transcripts", "html", ".obsidian", ".rag_index.json",
+    "transcripts", ".obsidian", ".rag_index.json",
     "node_modules", "venv", "__pycache__", "dist", "build", ".git",
 }
 
@@ -64,16 +68,66 @@ def resolve_space_path(space_id: str) -> Path:
     return path
 
 
-def list_spaces(config: dict) -> list[dict]:
-    root = vault_root(config)
-    if not root.is_dir():
+def _load_registry() -> list[Path]:
+    if not _SPACES_REGISTRY.exists():
+        return []
+    try:
+        return [Path(p) for p in json.loads(_SPACES_REGISTRY.read_text())]
+    except Exception:
         return []
 
-    spaces = []
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("."):
-            continue
-        spaces.append(_describe_space(entry))
+
+def _register_space(path: Path) -> None:
+    paths = _load_registry()
+    if path not in paths:
+        paths.append(path)
+        _SPACES_REGISTRY.write_text(json.dumps([str(p) for p in paths]))
+
+
+def _load_hidden() -> set[Path]:
+    if not _HIDDEN_SPACES_FILE.exists():
+        return set()
+    try:
+        return {Path(p) for p in json.loads(_HIDDEN_SPACES_FILE.read_text())}
+    except Exception:
+        return set()
+
+
+def hide_space(path: Path) -> None:
+    hidden = _load_hidden()
+    hidden.add(path)
+    _HIDDEN_SPACES_FILE.write_text(json.dumps([str(p) for p in hidden]))
+
+
+def list_spaces(config: dict) -> list[dict]:
+    root = vault_root(config)
+    hidden = _load_hidden()
+    seen: set[Path] = set()
+    spaces: list[dict] = []
+
+    if root.is_dir():
+        for lvl1 in sorted(root.iterdir()):
+            if not lvl1.is_dir() or lvl1.name.startswith("."):
+                continue
+            if lvl1.resolve() in hidden:
+                continue
+            seen.add(lvl1)
+            spaces.append(_describe_space(lvl1))
+            for lvl2 in sorted(lvl1.iterdir()):
+                if not lvl2.is_dir() or lvl2.name.startswith("."):
+                    continue
+                if lvl2.name in _NON_CONTENT_DIRS:
+                    continue
+                if lvl2.resolve() in hidden:
+                    continue
+                seen.add(lvl2)
+                spaces.append(_describe_space(lvl2))
+
+    for path in _load_registry():
+        if path not in seen and path.is_dir() and path.resolve() not in hidden:
+            seen.add(path)
+            spaces.append(_describe_space(path))
+
     spaces.sort(key=lambda s: s["ultima_modificacao"], reverse=True)
     return spaces
 
@@ -106,6 +160,7 @@ def open_space(path: str) -> str:
     target = Path(path).expanduser().resolve()
     if not target.is_dir():
         raise FileNotFoundError(f"Pasta não encontrada: {target}")
+    _register_space(target)
     return encode_space_id(target)
 
 
@@ -141,6 +196,7 @@ def _walk(current: Path, root: Path) -> list[dict]:
                 "name": entry.name,
                 "path": rel,
                 "type": "dir",
+                "space_id": encode_space_id(entry),
                 "children": _walk(entry, root),
             })
         else:
@@ -153,12 +209,45 @@ def _walk(current: Path, root: Path) -> list[dict]:
     return nodes
 
 
-def read_space_file(space_path: Path, rel_path: str) -> Path:
-    """Resolve um path relativo dentro do espaço, recusando escapar da pasta (path traversal)."""
+def _resolve_safe(space_path: Path, rel_path: str) -> Path:
     candidate = (space_path / rel_path).resolve()
     space_resolved = space_path.resolve()
     if space_resolved not in candidate.parents and candidate != space_resolved:
         raise PermissionError("Path fora do espaço")
+    return candidate
+
+
+def read_space_file(space_path: Path, rel_path: str) -> Path:
+    candidate = _resolve_safe(space_path, rel_path)
     if not candidate.is_file():
         raise FileNotFoundError(rel_path)
     return candidate
+
+
+def write_space_file(space_path: Path, rel_path: str, content: str) -> None:
+    candidate = _resolve_safe(space_path, rel_path)
+    if not candidate.is_file():
+        raise FileNotFoundError(rel_path)
+    candidate.write_text(content, encoding="utf-8")
+
+
+def delete_space_file(space_path: Path, rel_path: str) -> None:
+    candidate = _resolve_safe(space_path, rel_path)
+    if not candidate.is_file():
+        raise FileNotFoundError(rel_path)
+    candidate.unlink()
+
+
+def create_space_file(space_path: Path, rel_path: str) -> None:
+    candidate = _resolve_safe(space_path, rel_path)
+    if candidate.exists():
+        raise FileExistsError(f"Arquivo já existe: {rel_path}")
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    candidate.touch()
+
+
+def create_space_folder(space_path: Path, rel_path: str) -> None:
+    candidate = _resolve_safe(space_path, rel_path)
+    if candidate.exists():
+        raise FileExistsError(f"Pasta já existe: {rel_path}")
+    candidate.mkdir(parents=True)

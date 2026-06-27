@@ -58,6 +58,19 @@ class DiscoverSourcesRequest(BaseModel):
     max_per_camada: int = 5
 
 
+class SaveFileRequest(BaseModel):
+    path: str
+    content: str
+
+
+class CreateFileRequest(BaseModel):
+    path: str
+
+
+class CreateFolderRequest(BaseModel):
+    path: str
+
+
 class ChatRequest(BaseModel):
     message: str
     mode: str = "qa"

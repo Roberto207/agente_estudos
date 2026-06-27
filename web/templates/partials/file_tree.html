@@ -3,19 +3,28 @@
   {% for node in nodes %}
   <li>
     {% if node.type == "dir" %}
-    <details class="tree-node" open>
-      <summary class="text-secondary text-sm py-1 px-1 rounded hover:bg-surface2 flex items-center gap-1.5">
-        <span class="text-muted">📁</span> {{ node.name }}
+    <details class="tree-node group/dir" open>
+      <summary class="text-secondary text-sm py-1 px-1 rounded hover:bg-surface2 flex items-center gap-1">
+        <span class="text-muted">📁</span>
+        <span class="flex-1 truncate">{{ node.name }}</span>
+        <a href="/w/{{ node.space_id }}" onclick="event.stopPropagation()"
+           class="opacity-0 group-hover/dir:opacity-100 text-xs text-muted hover:text-accent px-1 shrink-0 transition-opacity"
+           title="Abrir como espaço">↗</a>
       </summary>
       <div class="ml-3 border-l border-edge pl-1">
         {{ render_tree(node.children) }}
       </div>
     </details>
     {% else %}
-    <button type="button" data-path="{{ node.path }}"
-            class="file-link w-full text-left text-sm py-1 px-2 rounded hover:bg-surface2 hover:text-primary text-secondary truncate block">
-      {{ node.name }}
-    </button>
+    <div class="group/file flex items-center">
+      <button type="button" data-path="{{ node.path }}"
+              class="file-link flex-1 text-left text-sm py-1 px-2 rounded hover:bg-surface2 hover:text-primary text-secondary truncate">
+        {{ node.name }}
+      </button>
+      <button type="button" data-delete-path="{{ node.path }}"
+              class="opacity-0 group-hover/file:opacity-100 shrink-0 w-5 h-5 flex items-center justify-center text-xs text-muted hover:text-danger rounded mr-1 transition-opacity"
+              title="Apagar arquivo">×</button>
+    </div>
     {% endif %}
   </li>
   {% endfor %}

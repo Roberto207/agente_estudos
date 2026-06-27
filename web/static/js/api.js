@@ -19,4 +19,22 @@ EstudAI.api = {
     if (!res.ok) throw new Error(data.detail || `Erro ${res.status}`);
     return data;
   },
+
+  async put(url, body) {
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Erro ${res.status}`);
+    return data;
+  },
+
+  async delete(url) {
+    const res = await fetch(url, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Erro ${res.status}`);
+    return data;
+  },
 };

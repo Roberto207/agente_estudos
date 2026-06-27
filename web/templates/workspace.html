@@ -12,13 +12,46 @@
 
 <div class="workspace-grid" id="workspace" data-space-id="{{ space_id }}">
   <!-- Esquerda: árvore de arquivos -->
-  <aside class="bg-surface border-r border-edge overflow-y-auto p-3" id="file-tree">
-    {{ tree_macro.render_tree(tree) }}
+  <aside class="bg-surface border-r border-edge flex flex-col">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-edge shrink-0">
+      <span class="text-xs text-muted">Arquivos</span>
+      <div class="flex gap-2">
+        <button id="btn-new-folder" class="text-xs text-muted hover:text-accent hover:underline">+ Pasta</button>
+        <button id="btn-new-file" class="text-xs text-accent hover:underline">+ Arquivo</button>
+      </div>
+    </div>
+    <div id="new-folder-form" class="hidden px-3 py-2 border-b border-edge shrink-0">
+      <input id="new-folder-name" type="text" placeholder="nome-da-pasta"
+             class="w-full bg-surface2 border border-edge rounded px-2 py-1 text-xs outline-none focus:border-accent mb-1">
+      <div class="flex gap-1">
+        <button id="new-folder-confirm" class="flex-1 text-xs py-1 rounded bg-accent text-white">Criar pasta</button>
+        <button id="new-folder-cancel" class="flex-1 text-xs py-1 rounded border border-edge text-secondary">Cancelar</button>
+      </div>
+    </div>
+    <div id="new-file-form" class="hidden px-3 py-2 border-b border-edge shrink-0">
+      <input id="new-file-name" type="text" placeholder="nome.md"
+             class="w-full bg-surface2 border border-edge rounded px-2 py-1 text-xs outline-none focus:border-accent mb-1">
+      <div class="flex gap-1">
+        <button id="new-file-confirm" class="flex-1 text-xs py-1 rounded bg-accent text-white">Criar</button>
+        <button id="new-file-cancel" class="flex-1 text-xs py-1 rounded border border-edge text-secondary">Cancelar</button>
+      </div>
+    </div>
+    <div class="overflow-y-auto flex-1 p-3" id="file-tree">
+      {{ tree_macro.render_tree(tree) }}
+    </div>
   </aside>
 
   <!-- Centro: leitor de markdown -->
-  <main class="overflow-y-auto p-8" id="content-area">
-    <div class="text-muted text-sm">Selecione um arquivo na lateral esquerda para ler.</div>
+  <main class="flex flex-col overflow-hidden" id="content-area">
+    <div id="file-actions" class="hidden shrink-0 flex items-center gap-2 px-6 py-2 border-b border-edge bg-surface">
+      <button id="btn-edit" class="text-xs px-3 py-1 rounded border border-edge text-secondary hover:bg-surface2">Editar</button>
+      <button id="btn-save" class="hidden text-xs px-3 py-1 rounded bg-accent text-white">Salvar</button>
+      <button id="btn-cancel-edit" class="hidden text-xs px-3 py-1 rounded border border-edge text-secondary">Cancelar</button>
+      <button id="btn-delete-file" class="text-xs px-3 py-1 rounded border border-danger text-danger hover:bg-surface2 ml-auto">Apagar arquivo</button>
+    </div>
+    <div id="content-body" class="overflow-y-auto flex-1 p-8">
+      <div class="text-muted text-sm">Selecione um arquivo na lateral esquerda para ler.</div>
+    </div>
   </main>
 
   <!-- Direita: abas de funcionalidades -->

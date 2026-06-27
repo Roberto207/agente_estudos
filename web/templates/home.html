@@ -25,12 +25,17 @@
   {% if spaces %}
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for s in spaces %}
-    <a href="/w/{{ s.space_id }}"
-       class="block bg-surface border border-edge rounded-xl p-5 hover:border-accent transition-colors">
-      <h3 class="font-semibold text-primary mb-1">{{ s.nome }}</h3>
-      <p class="text-xs text-muted truncate mb-3">{{ s.path }}</p>
-      <p class="text-xs text-secondary">{{ s.total_arquivos }} arquivo(s) .md</p>
-    </a>
+    <div class="relative group/card">
+      <a href="/w/{{ s.space_id }}"
+         class="block bg-surface border border-edge rounded-xl p-5 hover:border-accent transition-colors">
+        <h3 class="font-semibold text-primary mb-1">{{ s.nome }}</h3>
+        <p class="text-xs text-muted truncate mb-3">{{ s.path }}</p>
+        <p class="text-xs text-secondary">{{ s.total_arquivos }} arquivo(s) .md</p>
+      </a>
+      <button onclick="EstudAI.hideSpace('{{ s.space_id }}')"
+              class="absolute top-2 right-2 opacity-0 group-hover/card:opacity-100 w-6 h-6 flex items-center justify-center rounded text-muted hover:text-danger hover:bg-surface2 text-sm transition-opacity"
+              title="Remover da lista (não apaga do disco)">×</button>
+    </div>
     {% endfor %}
   </div>
   {% else %}

@@ -17,6 +17,16 @@ EstudAI.createSpace = async function () {
   }
 };
 
+EstudAI.hideSpace = async function (spaceId) {
+  if (!confirm("Remover da lista? O conteúdo não será apagado do disco.")) return;
+  try {
+    await EstudAI.api.delete(`/api/spaces/${spaceId}`);
+    window.location.reload();
+  } catch (err) {
+    alert("Erro ao remover: " + err.message);
+  }
+};
+
 EstudAI.openSpace = async function () {
   const path = document.getElementById("open-path").value.trim();
   const errorEl = document.getElementById("open-error");
