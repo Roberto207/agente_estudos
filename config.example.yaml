@@ -45,6 +45,22 @@ podcast:
   temperaturas: {planejador: 0.3, redator: 0.8, critico: 0.1}
   reescritas: 1                      # reescritas guiadas pelo crítico (0 desliga)
 
+# ── Vozes do podcast (python main.py --mode podcast-audio | voice-test) ──
+# Motores: edge (local, sem GPU, serviço da Microsoft) | xtts | chatterbox | qwen3 (GPU: notebooks/podcast_audio.ipynb)
+voz:
+  engine: edge
+  engines:
+    edge: {professor: pt-BR-AntonioNeural, aprendiz: pt-BR-FranciscaNeural}   # também: pt-BR-ThalitaMultilingualNeural
+    xtts: {professor: null, aprendiz: null}         # escolha os nomes com tts.speakers (no notebook)
+    chatterbox: {}                                  # uma voz só — use clone para diferenciar os papéis
+    qwen3: {professor: Ryan, aprendiz: Serena, modelo: "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"}
+  clone:                                            # opcional; só xtts, chatterbox, qwen3 (este exige ref_text)
+    professor: {ref_wav: null, ref_text: null}
+    aprendiz:  {ref_wav: null, ref_text: null}
+  pausa_ms: {fala: 250, bloco: 700, pedaco: 120}
+  teste: {engines: [edge]}                          # motores do --mode voice-test
+  cache_dir: "~/.cache/agente_estudos/tts"          # fora do vault (~50 MB de WAV por episódio de 20 min)
+
 # ── Transcrição de Vídeo ─────────────────────────────────────
 # Como transcrever vídeos locais (YouTube usa yt-dlp automaticamente)
 # auto: tenta groq, depois local, depois nenhum

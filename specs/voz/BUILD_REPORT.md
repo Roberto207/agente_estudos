@@ -109,3 +109,22 @@ Cópia limpa de `alura_modelos_tradicionais_classificacao`: 6 arquivos, 5 episó
   A execução em Opus veio da definição do agente recarregada com atraso dentro da sessão.
 - **Custo total estimado (com output):** ~$2,6, ou ~$0,52 por episódio. Os episódios desta pasta são mais curtos que os do devops, então a comparação direta é a do A/B acima.
 - **Gargalo atual:** o crítico em Opus virou o maior custo (42%). Com primeiras versões piores, ele roda mais vezes: 1,6 execução por episódio, contra 1,44 com o redator em Opus.
+
+## B3 — áudio local (edge-tts) — 2026-10-11
+
+`src/tts/`:
+- `audio.run`: lint reprovado é pulado (R28), clone validado antes de sintetizar (R31), cache atômico (R32/R33) e manifesto (R34);
+- `voice_test.run`: R35–R37;
+- motores: `edge`, `xtts`, `chatterbox` e `qwen3`;
+- montagem com ffmpeg e `wave`: silêncio das pontas aparado, pausas configuráveis, loudnorm −16 LUFS, MP3 mono 128k;
+- números por extenso com `normalizar` (R19) e falas longas quebradas pelo `max_chars` de cada motor.
+
+Na CLI: `--mode podcast-audio` e `--mode voice-test`, com `--engine` e `--saida`. São 77 testes, com um motor falso e ffmpeg real.
+
+**Testado de verdade (edge-tts):**
+- Teste de vozes: 5 falas, MP3 de 43 s, vozes Antonio (Professor) e Francisca (Aprendiz).
+- Episódio 1 do devops (3.041 palavras, 136 falas): síntese em 5 min 35 s. MP3 de 19 min 21 s, contra 20 min 16 s estimados no roteiro. Loudness −16,5 LUFS, 18,6 MB.
+- 2ª execução: 100% do cache, 22 s (só concatenação e codificação).
+- O cache ocupa ~52 MB por episódio, por isso saiu do vault (`voz.cache_dir`).
+
+**Observado:** as pausas entre frases dentro de uma fala (~0,9 s) são da prosódia do próprio edge-tts, não da montagem.

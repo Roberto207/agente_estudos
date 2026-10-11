@@ -75,10 +75,12 @@ def main(
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
     config_path: str = typer.Option("", "--config", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
-    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas sobre pasta existente) | podcast (roteiros de podcast sobre pasta existente)"),
+    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas sobre pasta existente) | podcast (roteiros de podcast sobre pasta existente) | podcast-audio (MP3 dos roteiros) | voice-test (mesmo trecho em cada motor de voz)"),
     apenas: list[str] = typer.Option([], "--apenas", "-a", help="Restringe outputs no modo postprocess: flashcards, quiz, next_steps, canvas (repita: --apenas quiz --apenas flashcards). Vazio = todos."),
     replanejar: bool = typer.Option(False, "--replanejar", help="Modo podcast: arquiva serie.json e roteiros atuais em podcast/arquivo/ e planeja a série de novo"),
-    episodios: str = typer.Option("", "--episodios", help="Modo podcast: regera só estes episódios (ex.: 2,5)"),
+    episodios: str = typer.Option("", "--episodios", help="Modos podcast/podcast-audio: só estes episódios (ex.: 2,5)"),
+    engine: list[str] = typer.Option([], "--engine", help="Modos podcast-audio/voice-test: motor de voz (edge | xtts | chatterbox | qwen3); no voice-test, repita para testar vários"),
+    saida: str = typer.Option("teste_vozes", "--saida", help="Modo voice-test: pasta onde gravar um MP3 por motor"),
     chat: bool = typer.Option(False, "--chat", "-c", help="Abre chat interativo sobre a pasta de estudos"),
     chat_mode: str = typer.Option("qa", "--chat-mode", help="Modo do chat: qa (NotebookLM) | socratico"),
 ):
@@ -94,6 +96,29 @@ def main(
             sys.exit(1)
         from src.chat import run as chat_run
         chat_run(config=config, pasta=pasta, mode=chat_mode)
+        return
+
+    # ── Modos de áudio (sem LLM: não exigem tema nem chave de API) ────────────
+    if mode in ("podcast-audio", "voice-test"):
+        from src.tts.base import ErroTTS
+        try:
+            if mode == "voice-test":
+                from src.tts.voice_test import run as voice_test_run
+                rel = voice_test_run(config, saida=saida, engines=list(engine) or None)
+                if not any(r["ok"] for r in rel["resultados"]):
+                    raise typer.Exit(1)  # R37: só falha se nenhum motor funcionou
+                return
+            if not pasta:
+                raise ErroTTS("--pasta é obrigatório no modo podcast-audio")
+            from src.tts.audio import run as audio_run
+            nums = [int(x) for x in episodios.replace(" ", "").split(",") if x] if episodios else None
+            audio_run(config, pasta, episodios=nums, engine_nome=engine[0] if engine else None)
+        except ValueError:
+            console.print(f"[red]--episodios inválido: {episodios!r} (use números separados por vírgula, ex.: 2,5)[/red]")
+            raise typer.Exit(1)
+        except ErroTTS as exc:
+            console.print(f"[red]✗[/red] {exc}")
+            raise typer.Exit(1)
         return
 
     # ── Modo geração ─────────────────────────────────────────────────────────

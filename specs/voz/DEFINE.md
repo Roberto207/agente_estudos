@@ -32,7 +32,8 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
   extenso (um a noventa e nove).
 - **D9 · Material curto:** episódio cujos arquivos-fonte somam menos de 1.500 palavras.
 - **D10 · Engines que clonam:** os que o adaptador declara com `clona = True`; a lista é exposta por
-  `src.tts.registry.engines_que_clonam()` ⚑ (hoje: `xtts`, `chatterbox`; `qwen3` a confirmar no B4).
+  `src.tts.registry.engines_que_clonam()` — `xtts`, `chatterbox` e `qwen3` (este exige também
+  `voz.clone.<papel>.ref_text`, a transcrição do áudio de referência).
 - **D11 · Frontmatter do roteiro (chaves fixas):** `episodio` (int), `titulo`, `fontes` (lista de
   caminhos D1), `pontes` (lista de `{alvo: "episodio:<n>"|"arquivo:<caminho>"|"vault:<caminho>", fala: <trecho>}`),
   `rag_trechos` (lista de caminhos, pode ser vazia), `prompts` (`{planejador, redator, critico}` → `"v<N>+<sha1[:8]>"`),
@@ -120,6 +121,7 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
 
 ## Histórico
 
+- **v1.2 → v1.3** (build B3/B4): D10 inclui `qwen3` com `ref_text` (API oficial: `generate_voice_clone` exige a transcrição); cache de áudio fora do vault (`voz.cache_dir`, padrão `~/.cache/agente_estudos/tts`) — o DESIGN previa `podcast/audio/.cache`, que daria ~50 MB por episódio sincronizando com o Obsidian.
 - **v1.1 → v1.2** (teste real do caminho Claude): D1 exclui `fontes_selecionadas.md` (curadoria do `buscar-fontes`, não é material); planejador v3 separa conceitos `introduz` (1–5 centrais) de `menciona` (apoio) — R10 ganha `menciona`, R11 aceita `retoma` de conceito em `introduz ∪ menciona`.
 - **v1 → v1.1** (durante o build B1 e a rodada 2 de crítica dos prompts; esclarecimentos sem mudar o escopo aprovado):
   - D7 aceita a variante tipográfica da pontuação permitida (o próprio prompt e os modelos usam travessão e reticências);
