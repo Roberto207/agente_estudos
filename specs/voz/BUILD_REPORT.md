@@ -66,3 +66,46 @@ O teste usou 4 roteiros com problema real achado pelo Opus (versões antes da re
 Custo de entrada por execução: Sonnet ~$0,084 contra Opus ~$0,156 (1,9× mais barato, com o mesmo volume de tokens). Em 9 episódios, isso economizaria ~$0,9 (~11% da série) e deixaria passar 3 de 4 erros de fidelidade.
 
 **Decisão:** o crítico continua em Opus. O erro do ep. 8 agora é barrado pelo lint L9, sem LLM.
+
+### Teste: redator em Sonnet 5.5 (crítico Opus), episódios 3, 6 e 7 do devops
+
+O teste usou as mesmas entradas que o Opus recebeu. A única diferença foi a meta de palavras, que passou de "2200 a 3000" para "2200 a 2700".
+
+| | Opus 5.5 (série original) | Sonnet 5.5 |
+|---|---|---|
+| Problemas na 1ª versão, segundo o crítico Opus | 1 / 1 / 1 | 3 / 3 / 2 |
+| Depois de 1 reescrita | aprovados | aprovados |
+| Custo de entrada do redator (3 episódios) | $1,22 | $0,49 |
+| Output estimado do redator | ~$0,84 | ~$0,20 |
+| Palavras | 2714 / 2981 / 3136 | 2787 / 2989 / 2421 |
+
+- **Erros típicos do Sonnet:** precisão numérica (2.400 ms lidos como "dois segundos e meio"), atribuição sem fonte, anúncio do conteúdo do próximo episódio e o Professor confirmando uma reformulação errada do Aprendiz.
+- **Leitura do texto:** natural e didático, no mesmo padrão do Opus.
+- **Decisão:** o redator `gerar-podcast` passa a usar Sonnet e o crítico continua em Opus. O custo por episódio cai ~1,8×. O risco aceito é que, com primeiras versões mais erradas, cresce a chance de algum erro escapar também do crítico.
+
+### Bastidor removido da série devops
+
+As 75 falas de bastidor foram corrigidas com edição pontual (Sonnet, modo reescrita) nos episódios 1–6 e 9. Os 9 episódios passam no lint. Os metadados foram refeitos com `finalizar`, que soma 1 reescrita. O veredito do crítico é o da versão anterior às edições, porque elas não mexeram no conteúdo técnico.
+
+### Orquestração movida para `prompts/podcast_orquestracao.md`
+
+A orquestração passou a ser fonte única, lida pelo novo agente `podcast-serie` (orquestrador dedicado, Sonnet) e pela Fase 8 do `criar-estudo`. O `criar-estudo` continua em Opus, porque também escreve o material de estudo.
+
+### Teste: configuração final (orquestrador Sonnet, redator Sonnet, crítico Opus), série completa
+
+Cópia limpa de `alura_modelos_tradicionais_classificacao`: 6 arquivos, 5 episódios, 9.038 palavras.
+
+- **Planejamento v3:** de 3 a 5 conceitos centrais e de 1 a 6 de apoio por episódio. A v2, na mesma pasta, tinha listado de 7 a 14 centrais.
+- **Resultado:** 4 episódios aprovados; o episódio 2 terminou `critica: reprovado`. A 1ª crítica só apontou uma ponte; depois da reescrita, a 2ª crítica achou uma contradição de fidelidade que já estava na 1ª versão. É sinal de que o crítico não é determinístico, e o problema ficou registrado no frontmatter.
+- **Orquestrador:** 45 chamadas, sem nenhuma falha, e o planejamento passou na 1ª tentativa. O passo `finalizar N && entradas N+1` foi seguido. Sobrou um loop de espera desnecessário.
+- **Custo de entrada:** $2,28, dividido assim:
+
+| Papel | Custo |
+|---|---|
+| Crítico Opus (8 execuções) | $0,96 |
+| Orquestrador Sonnet | $0,70 |
+| Redator Sonnet (7 execuções) + 1 execução em Opus | $0,48 + $0,14 |
+
+  A execução em Opus veio da definição do agente recarregada com atraso dentro da sessão.
+- **Custo total estimado (com output):** ~$2,6, ou ~$0,52 por episódio. Os episódios desta pasta são mais curtos que os do devops, então a comparação direta é a do A/B acima.
+- **Gargalo atual:** o crítico em Opus virou o maior custo (42%). Com primeiras versões piores, ele roda mais vezes: 1,6 execução por episódio, contra 1,44 com o redator em Opus.
