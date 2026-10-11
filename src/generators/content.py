@@ -77,6 +77,12 @@ Escreva um arquivo .md para um vault Obsidian seguindo EXATAMENTE esta estrutura
 Os três níveis (TL;DR, Resumo, Conteúdo Completo) devem ser autossuficientes: alguém lendo só o Conteúdo Completo não deve precisar dos outros.
 """
 
+# Regras didáticas compartilhadas com o agente Claude criar-estudo — fonte
+# única em prompts/regras_didaticas.md, para as duas versões não divergirem.
+_REGRAS_DIDATICAS = Path(__file__).resolve().parents[2] / "prompts" / "regras_didaticas.md"
+if _REGRAS_DIDATICAS.exists():
+    _SYSTEM_WRITER += "\n" + _REGRAS_DIDATICAS.read_text(encoding="utf-8")
+
 
 def plan_structure(
     llm: LLMClient,
@@ -327,11 +333,34 @@ Inclua código Python funcional real (não pseudocódigo) quando o tema envolver
 Cubra TODAS as variantes/algoritmos relevantes do tema — não apenas o caso mais simples.
 Se omitir algum algoritmo importante do tema, o arquivo será rejeitado e reescrito."""
 
-    return llm.chat(
-        messages=[{"role": "user", "content": prompt}],
-        system=_SYSTEM_WRITER,
-        max_tokens=8192,
-    )
+    messages = [{"role": "user", "content": prompt}]
+    text = llm.chat(messages=messages, system=_SYSTEM_WRITER, max_tokens=8192)
+
+    # O prompt promete rejeitar arquivo curto — aqui a promessa é cumprida.
+    # Modelos pequenos costumam parar bem antes das 1400 palavras; uma reescrita
+    # com o rascunho anterior no contexto recupera boa parte disso.
+    content_cfg = getattr(llm, "config", {}).get("content", {})
+    min_words = int(content_cfg.get("min_words", 900))
+    for _ in range(int(content_cfg.get("rewrite_attempts", 1))):
+        words = len((text or "").split())
+        if words >= min_words:
+            break
+        retry = llm.chat(
+            messages=messages + [
+                {"role": "assistant", "content": text or ""},
+                {"role": "user", "content": (
+                    f"Este rascunho tem só {words} palavras — abaixo do mínimo de 1400. "
+                    "Reescreva o arquivo COMPLETO, expandindo cada seção do 'Conteúdo Completo' "
+                    "com mais explicação, exemplos concretos e código, mantendo a mesma estrutura "
+                    "e o rodapé de navegação. Responda só com o arquivo."
+                )},
+            ],
+            system=_SYSTEM_WRITER,
+            max_tokens=8192,
+        )
+        if len((retry or "").split()) > words:
+            text = retry
+    return text
 
 
 def _build_nav_map(structure: dict) -> dict[str, tuple[str, str]]:

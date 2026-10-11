@@ -41,8 +41,25 @@ class LLMClient:
         system: str | None = None,
         max_tokens: int = 8192,
     ) -> Any:
-        response = self.chat(messages, system, max_tokens)
-        return _extract_json(response)
+        """Como `chat`, mas devolve o JSON da resposta. Se o JSON vier
+        malformado (comum em modelos pequenos), reenvia a conversa com o erro e
+        pede só o JSON corrigido — até `json_retries` vezes (config, default 2)."""
+        retries = int(self.config.get("json_retries", 2))
+        msgs = list(messages)
+        for attempt in range(retries + 1):
+            response = self.chat(msgs, system, max_tokens)
+            try:
+                return _extract_json(response)
+            except (ValueError, json.JSONDecodeError) as exc:
+                if attempt == retries:
+                    raise
+                msgs = msgs + [
+                    {"role": "assistant", "content": response or ""},
+                    {"role": "user", "content": (
+                        f"Sua resposta não é JSON válido ({str(exc)[:200]}). "
+                        "Responda de novo APENAS com o JSON completo e válido, sem texto antes ou depois."
+                    )},
+                ]
 
     # ── Chat com tools (modo agentico) ────────────────────────────────────────
 
@@ -67,12 +84,15 @@ class LLMClient:
         cfg = self.config.get("anthropic", {})
         client = anthropic.Anthropic(api_key=cfg.get("api_key", ""))
         kwargs: dict[str, Any] = {
-            "model": cfg.get("model", "claude-opus-4-8"),
+            "model": _model(cfg, "claude-opus-4-8"),
             "max_tokens": max_tokens,
             "messages": messages,
         }
         if system:
             kwargs["system"] = system
+
+        if "temperature" in cfg:
+            kwargs["temperature"] = cfg["temperature"]
 
         resp = client.messages.create(**kwargs)
         return resp.content[0].text
@@ -89,7 +109,7 @@ class LLMClient:
         cfg = self.config.get("anthropic", {})
         client = anthropic.Anthropic(api_key=cfg.get("api_key", ""))
         kwargs: dict[str, Any] = {
-            "model": cfg.get("model", "claude-opus-4-8"),
+            "model": _model(cfg, "claude-opus-4-8"),
             "max_tokens": max_tokens,
             "messages": messages,
             "tools": tools,
@@ -121,21 +141,21 @@ class LLMClient:
     # ── OpenAI / Groq / Ollama (API compatível) ───────────────────────────────
 
     def _openai_compat_chat(self, messages: list[dict], system: str | None, max_tokens: int) -> str:
-        from openai import OpenAI
-
         cfg = self.config.get(self.provider, {})
         client = self._make_openai_client(cfg)
-        model = cfg.get("model", "gpt-4o")
+        model = _model(cfg, "gpt-4o")
 
         msgs: list[dict] = []
         if system:
             msgs.append({"role": "system", "content": system})
         msgs.extend(messages)
 
+        extra = {"temperature": cfg["temperature"]} if "temperature" in cfg else {}
         resp = client.chat.completions.create(
             model=model,
             messages=msgs,
             max_tokens=max_tokens,
+            **extra,
         )
         return resp.choices[0].message.content
 
@@ -146,11 +166,9 @@ class LLMClient:
         system: str | None,
         max_tokens: int,
     ) -> AgentResponse:
-        from openai import OpenAI
-
         cfg = self.config.get(self.provider, {})
         client = self._make_openai_client(cfg)
-        model = cfg.get("model", "gpt-4o")
+        model = _model(cfg, "gpt-4o")
 
         msgs: list[dict] = []
         if system:
@@ -223,9 +241,17 @@ class LLMClient:
                 base_url="https://api.groq.com/openai/v1",
             )
         if self.provider == "ollama":
-            base_url = cfg.get("base_url", "http://localhost:11434")
+            base_url = cfg.get("base_url", "http://localhost:11434").rstrip("/")
             return OpenAI(api_key="ollama", base_url=f"{base_url}/v1")
-        return OpenAI(api_key=cfg.get("api_key", ""))
+        # `base_url` opcional: qualquer servidor compatível com a API da OpenAI
+        # (vLLM / llama.cpp num notebook Kaggle/Colab, OpenRouter, etc.).
+        return OpenAI(api_key=cfg.get("api_key", "") or "sem-chave", base_url=cfg.get("base_url") or None)
+
+
+def _model(cfg: dict, default: str) -> str:
+    # strip: um espaço sobrando no config.yaml ("llama3.2:latest ") fazia o
+    # provider responder "model not found".
+    return str(cfg.get("model") or default).strip()
 
 
 def _extract_json(text: str) -> Any:

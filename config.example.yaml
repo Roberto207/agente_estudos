@@ -13,18 +13,27 @@ anthropic:
 
 # ── OpenAI ───────────────────────────────────────────────────
 openai:
-  api_key: "sk-...
+  api_key: "sk-..."
   model: "gpt-4o-mini"                    # gpt-4o-mini | gpt-4-turbo
+  # base_url: "http://localhost:8000/v1"  # opcional: qualquer servidor compatível com a API OpenAI
+                                          # (vLLM/llama.cpp num notebook Kaggle/Colab, OpenRouter...)
+  # temperature: 0.7                      # opcional (vale também em anthropic/groq/ollama)
 
 # ── Groq ─────────────────────────────────────────────────────
 groq:
-  api_key: gsk... 
+  api_key: "gsk_..."
   model: "llama-3.3-70b-versatile"   # mixtral-8x7b-32768 | gemma2-9b-it
 
 # ── Ollama (local) ───────────────────────────────────────────
 ollama:
   base_url: "http://localhost:11434"
   model: "llama3.2:latest"           # qwen2.5:14b | mistral | gemma3
+
+# ── Robustez para modelos menores ────────────────────────────
+json_retries: 2            # reenvios quando o LLM devolve JSON malformado (quiz, flashcards, planejamento)
+content:
+  min_words: 900           # arquivo .md abaixo disso é reescrito (o prompt pede 1400)
+  rewrite_attempts: 1      # 0 desliga a reescrita
 
 # ── Transcrição de Vídeo ─────────────────────────────────────
 # Como transcrever vídeos locais (YouTube usa yt-dlp automaticamente)

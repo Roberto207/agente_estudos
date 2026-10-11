@@ -27,12 +27,12 @@ Dado um tema (ex: *Redes Neurais*), o sistema produz:
 │   ├── transcript_1.md         # Vídeo YouTube distilado
 │   ├── github_2.md             # README + notebooks de repositório GitHub
 │   └── artigo_3.md             # Artigo resumido
-└── html/                       # Versão browser (Catppuccin Mocha)
-    ├── index.html              # Hub de navegação
+└── html/                       # Ferramentas de revisão (Catppuccin Mocha)
     ├── flashcards.html         # Spaced repetition (SM-2)
-    ├── quiz.html               # Quiz de múltipla escolha
-    └── ...
+    └── quiz.html               # Quiz de múltipla escolha
 ```
+
+> O hub HTML (`index.html`), as páginas HTML por conceito e o mapa mental (`visual_<tema>.html`) foram removidos por desuso. Pastas antigas que ainda os tenham não são alteradas.
 
 ## Providers de LLM suportados
 
@@ -216,7 +216,8 @@ Dentro do chat, os comandos disponíveis são:
 --fonte       -s   Fonte (repita para múltiplas)
 --config           Caminho alternativo para config.yaml
 --interactive -i   Modo interativo
---mode        -m   agent (padrão) | pipeline
+--mode        -m   agent (padrão) | pipeline | postprocess
+--apenas      -a   No modo postprocess: flashcards | quiz | next_steps | canvas (repita)
 --chat        -c   Abre chat sobre pasta existente (não gera conteúdo)
 --chat-mode        qa (padrão) | socratico
 ```
@@ -226,6 +227,20 @@ Dentro do chat, os comandos disponíveis são:
 **`--mode agent`** (padrão): loop agêntico real. O LLM recebe ferramentas e decide sozinho o que chamar, em que ordem, podendo se adaptar ao conteúdo encontrado.
 
 **`--mode pipeline`**: sequência fixa de 8 fases (legado). Útil quando o modelo não suporta tool_use (ex: alguns modelos Ollama).
+
+**`--mode postprocess`**: regenera flashcards, quiz, próximos passos e canvas sobre uma pasta já existente, sem tema nem fontes.
+
+### Rodar no Kaggle / Colab (LLM maior, sem custo)
+
+Modelos Ollama pequenos (1B–3B) geram material curto e JSON quebrado. O notebook [`notebooks/gerar_estudo.ipynb`](notebooks/gerar_estudo.ipynb) roda o mesmo pipeline numa GPU gratuita e devolve a pasta zipada:
+
+- `ollama_local` — sobe o Ollama na GPU T4 com um modelo maior (ex. `qwen2.5:14b`) e janela de contexto ajustada
+- `groq` — API do Groq (camada gratuita, modelos 70B), já suportada pelo projeto
+- `openai_compat` — qualquer endpoint compatível com a API OpenAI (`openai.base_url` no config)
+
+O notebook clona este repositório (precisa de push; repo privado → segredo `GITHUB_TOKEN`) e lê chaves do Kaggle Secrets / Colab userdata. Em datacenter, o YouTube às vezes bloqueia legendas e downloads — se falhar, suba o vídeo para o notebook e passe o caminho do arquivo como fonte (vídeo local).
+
+Para modelos menores, `json_retries` (reenvio quando o JSON vem malformado) e `content.min_words` (reescrita de arquivo curto) estão no `config.example.yaml`.
 
 ---
 
@@ -288,7 +303,7 @@ web:
 | Aba | Equivalente na CLI |
 |---|---|
 | 📚 Buscar Fontes | `buscar_fontes.py` |
-| ⚡ Gerar Conteúdo | `main.py` (modo `agent`), com checkboxes pra escolher quais dos 5 outputs opcionais (html, canvas, flashcards, quiz, mapa mental) gerar nessa execução |
+| ⚡ Gerar Conteúdo | `main.py` (modo `agent`), com checkboxes pra escolher quais dos 4 outputs opcionais (canvas, flashcards, quiz, próximos passos) gerar nessa execução |
 | 💬 Chat | `main.py --chat`, com troca QA ↔ Socrático |
 
 ### Limitações conhecidas
@@ -390,15 +405,13 @@ agente-estudos/
     │   ├── rag.py             # search_vault — busca semântica nos materiais indexados
     │   └── video.py           # yt-dlp + Whisper
     ├── chat.py                # Chat interativo (QA + Socrático) — RAG via search_vault
-    ├── postprocessing.py      # Flashcards/quiz/próximos-passos/mapa-mental compartilhado (agent + pipeline + web)
+    ├── postprocessing.py      # Flashcards/quiz/próximos-passos/canvas compartilhado (agent + pipeline + web)
     └── generators/
         ├── content.py         # Arquivos .md com 3 níveis de profundidade
         ├── canvas.py          # Canvas Obsidian
-        ├── html_gen.py        # HTML (Catppuccin Mocha) com tabs de profundidade
         ├── flashcards.py      # Flashcards SM-2 (gerado automaticamente)
         ├── quiz.py            # Quiz MCQ (gerado automaticamente)
-        ├── next_steps.py      # Recomendações pós-estudo (gerado automaticamente)
-        └── visual_map.py      # Mapa mental radial (Catppuccin Mocha)
+        └── next_steps.py      # Recomendações pós-estudo (gerado automaticamente)
 ```
 
 ```
@@ -449,8 +462,6 @@ Cada `.md` gerado contém obrigatoriamente três seções:
 - **Resumo (5 min)** — principais pontos com exemplos
 - **Conteúdo Completo** — artigo completo com tabelas, código e exemplos
 
-Na versão HTML, um seletor de tabs (⚡ Rápido / 📖 Médio / 📚 Completo) alterna entre os níveis automaticamente.
-
 ### Flashcards com Spaced Repetition
 
 Gerado automaticamente em `html/flashcards.html` após cada execução. Funciona offline, sem dependências externas.
@@ -458,7 +469,9 @@ Gerado automaticamente em `html/flashcards.html` após cada execução. Funciona
 - Algoritmo **SM-2** implementado em JavaScript puro
 - Card flip com animação 3D (CSS)
 - Botões Difícil / Médio / Bom / Fácil ajustam o intervalo de revisão
-- Progresso salvo em `localStorage` do browser
+- Progresso salvo em `localStorage` do browser (por id estável do card — regerar não embaralha o histórico)
+- Ordem embaralhada a cada sessão; modo "Pendentes hoje" (SM-2) ou "Todos os cards"
+- Grade numerada e campo "Ir para card N" para pular direto a qualquer card
 
 ### Quiz de múltipla escolha
 
@@ -466,8 +479,10 @@ Gerado automaticamente em `html/quiz.html`.
 
 - 10–15 questões por pasta de estudos
 - Feedback imediato após cada resposta com explicação
-- Placar final com lista de pontos fracos e links diretos para os MDs de origem
-- Botão "Tentar novamente" para repetir com as mesmas questões
+- Ordem das questões **e** das alternativas embaralhada a cada sessão
+- Grade numerada (verde = acerto, vermelho = erro) e campo "Ir para questão N"; anterior/próxima livres
+- Placar final com lista de pontos fracos e o arquivo .md de origem de cada uma
+- Botão "Tentar novamente" reembaralha e zera as respostas
 
 ### Recomendações pós-estudo
 
