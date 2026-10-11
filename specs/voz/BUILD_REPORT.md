@@ -128,3 +128,17 @@ Na CLI: `--mode podcast-audio` e `--mode voice-test`, com `--engine` e `--saida`
 - O cache ocupa ~52 MB por episódio, por isso saiu do vault (`voz.cache_dir`).
 
 **Observado:** as pausas entre frases dentro de uma fala (~0,9 s) são da prosódia do próprio edge-tts, não da montagem.
+
+## B4 — motores de GPU e notebook — 2026-10-11
+
+- **Adaptadores** `src/tts/xtts.py`, `chatterbox.py` e `qwen3.py`. As APIs foram conferidas nos READMEs oficiais (coqui-tts/idiap, resemble-ai/chatterbox, QwenLM/Qwen3-TTS), e as bibliotecas são importadas só na hora do uso.
+  - Chatterbox: `audio_prompt_path` só é passado se a assinatura de `generate` aceitar.
+  - Qwen3: carrega em float16 quando não há bfloat16, o que é o caso da T4, e confere a string de idioma com `get_supported_languages()`.
+- **`notebooks/podcast_audio.ipynb`**:
+  - um motor por sessão, com instalação só do motor escolhido;
+  - entrada pelo zip de `podcast/` (Kaggle: Dataset; Colab: upload);
+  - uma célula para listar as vozes;
+  - modos voice-test e podcast-audio;
+  - player e zip de saída.
+- **Teste a seco local:** todas as células, menos o clone do repositório, rodaram com o motor `edge`. A extração do zip, o MP3, o manifesto e o zip de saída funcionaram. Esse teste achou um bug, já corrigido: sem `nvidia-smi`, a célula de ambiente quebrava.
+- **Não testado:** XTTS, Chatterbox e Qwen3 com GPU de verdade, porque esta máquina não tem GPU. Os nomes de voz padrão do XTTS no notebook ("Damien Black" e "Ana Florence") vêm de memória e devem ser confirmados com a célula de listar vozes.

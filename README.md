@@ -232,6 +232,20 @@ Dentro do chat, os comandos disponíveis são:
 
 **`--mode podcast`** (em construção — spec em `specs/voz/`): sobre uma pasta já gerada, planeja uma série de episódios (`podcast/serie.json`) e escreve roteiros em diálogo Professor/Aprendiz (`podcast/episodio_NN_<tema>.md`), passando cada um por um lint determinístico e por um crítico LLM. `--episodios 2,5` regera episódios específicos; `--replanejar` arquiva a série atual e planeja de novo. A síntese de áudio (estágio 2) ainda não está implementada.
 
+### Áudio do podcast
+
+Depois dos roteiros (agente `podcast-serie` ou `--mode podcast`), cada fala é sintetizada com a voz do seu papel (Professor/Aprendiz) e o episódio vira um MP3 normalizado, com um manifesto `.json` ao lado.
+
+```bash
+python main.py --mode voice-test --engine edge                      # mesmo trecho em cada motor → teste_vozes/<motor>.mp3
+python main.py --mode podcast-audio --pasta <pasta> [--episodios 1,2] [--engine edge]
+```
+
+- **`edge`:** roda no PC, sem GPU, com vozes pt-BR nativas (serviço da Microsoft, precisa de rede).
+- **`xtts`, `chatterbox`, `qwen3`:** precisam de GPU e rodam em [`notebooks/podcast_audio.ipynb`](notebooks/podcast_audio.ipynb) (Kaggle/Colab, entrada e saída por zip).
+- **Clonagem de voz:** opcional, configurada em `voz.clone` (veja o `config.example.yaml`).
+- **Cache:** fica fora do vault (`~/.cache/agente_estudos/tts`). Reexecutar só refaz as falas que mudaram.
+
 ### Rodar no Kaggle / Colab (LLM maior, sem custo)
 
 Modelos Ollama pequenos (1B–3B) geram material curto e JSON quebrado. O notebook [`notebooks/gerar_estudo.ipynb`](notebooks/gerar_estudo.ipynb) roda o mesmo pipeline numa GPU gratuita e devolve a pasta zipada:

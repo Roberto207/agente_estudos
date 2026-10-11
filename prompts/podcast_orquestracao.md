@@ -60,3 +60,7 @@ Para cada episódio N:
    - Cada `finalizar` acrescenta uma entrada própria em `relatorio.json`, uma por episódio. Se o crítico falhou ou não gravou o JSON, use `--critica-indisponivel` em vez de `--critica`. O código grava o frontmatter (versões dos prompts, lint, veredito, pontes) e a linha do `podcast/relatorio.json`.
 
 **8.4 — Relatório.** Mostre ao usuário uma tabela com: episódio, título, palavras, duração estimada, lint, crítica e reescritas. Liste também os problemas que sobraram nos episódios reprovados. Não cole os roteiros.
+
+**Áudio (estágio 2) não é feito por agente.** Ao fim do 8.4, informe ao usuário como gerar os MP3:
+- local, sem GPU: `python main.py --mode podcast-audio --pasta "<pasta>"` (motor `edge`);
+- com GPU (XTTS, Chatterbox, Qwen3): `notebooks/podcast_audio.ipynb` no Kaggle ou Colab, com a pasta `podcast/` zipada.
