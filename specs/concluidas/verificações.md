@@ -1,0 +1,6 @@
+# Objetivo: 
+- Realizar algumas verificações e implementações:
+    1. Atualmente é possivel pedir tanto ao agente claude, tanto para o sistema agente_estudos, criar separadamente conteudo para pastas ja existentes? Por exemplo,pelo agente_estudos, criar apenas quizzes e flash cards para projetos criados anteriormente a ele. 
+    2. Implementação direta,verificar possibilidade: Atualmente,sao salvos nas pastas de transcripts, os videos em mp4 e mp3 dos vidoes usados para o tema,o que tras um peso de memoria enorme. Antes da implementacao da estrutura de pastas (fundamentos, avancado, transcripts),tanto o agente claude, quanto o agente_estudos conseguiam realizar a transcriçao de videos e gerar conteudos apartir deles, sem salva-los na mesma pasta (acredito que isso era feito em cache e deposi apagado,se possivel quero q volte a ser assim,visando um upgrade de memoria e velocidade, sem que eu tenha que manualmente apagar o video dps)
+    3. Erro encontrado: Rodando a API / frontend, o sistema ja aparece na pasta obsidian/ , mas nao é possivel sair dela. Eu queria que o sistema nao fosse tao preso ao obsidian,entao verifique o que esta causando iss,para que seja possivel agir sobre outras pastas.
+    4. Ao mover para outras pastas,so faca embedding / indexing delas, quando o usuario perguntar algo no chat a respeito

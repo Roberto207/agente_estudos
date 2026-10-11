@@ -1,0 +1,1 @@
+- O chat nao esta focando nas pastas e esta respondendo com informacoes da internet, sem conexao nenhuma com as pastsa. Talvez ele esteja tentando pegar as informacoes das pastas locais inicialmente mas apos um erro, pega da internet ou de seus proprios conhecimentos. Erro deu com modelo ollama, nao sei como funcionaria com outros modelos. 

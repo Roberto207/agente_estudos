@@ -1,6 +1,6 @@
 # Ideia — Geração de Podcasts de Estudo por Voz
 
-> Ideia discutida em 2026-06-16. Aplicação planejada para futuro próximo.
+> Ideia discutida em 2026-06-16. **Substituída pela spec em `specs/voz/` (2026-10-10)** — este arquivo fica como registro histórico.
 
 ---
 
@@ -51,7 +51,7 @@ pip install edge-tts
 ```
 - Vozes PT-BR: `pt-BR-FranciscaNeural` (apresentadora) e `pt-BR-AntonioNeural` (aprendiz)
 - Gera `.mp3` por bloco de fala, depois concatena com `pydub`
-- Zero custo, funciona offline
+- Zero custo, mas **não é offline**: usa o serviço de TTS do Edge (Microsoft, não oficial)
 
 ### Opção C — OpenAI TTS API
 - Vozes de alta qualidade (`nova`, `onyx`)
