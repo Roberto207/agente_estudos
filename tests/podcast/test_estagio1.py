@@ -140,7 +140,7 @@ def test_caminho_feliz_frontmatter_d11(tmp_path):
     assert D11 <= set(r.frontmatter)
     assert r.frontmatter["lint"] == "aprovado" and r.frontmatter["critica"] == "aprovado"
     assert r.frontmatter["reescritas"] == 0
-    assert r.frontmatter["prompts"]["redator"].startswith("v2+")
+    assert r.frontmatter["prompts"]["redator"].startswith("v3+")
     assert r.frontmatter["modelo"] == "fake-1"
     assert llm.papeis() == ["planejador", "redator", "critico"]
     assert [t for p, t, _ in llm.chamadas if p == "redator"] == [0.8]
@@ -233,6 +233,48 @@ def test_planejador_remove_ponte_para_arquivo_de_episodio_futuro(tmp_path):
     assert serie["episodios"][0]["pontes"] == []
     assert serie["episodios"][1]["pontes"] == [{"alvo": "arquivo:a.md", "ideia": "passado"}]
     assert any("b.md" in a for a in avisos)
+
+
+def test_v3_excesso_de_centrais_vai_para_menciona_e_retoma_aceita_menciona(tmp_path):
+    criar_pasta(tmp_path, {"a.md": "# A\nx", "b.md": "# B\nx"}, guia="[[a]] [[b]]")
+    plano = {"titulo_serie": "S", "episodios": [
+        {"numero": 1, "titulo": "A", "arquivos": ["a.md"], "introduz": list("cdefghi"), "menciona": ["softmax"],
+         "retoma": [], "pontes": []},
+        {"numero": 2, "titulo": "B", "arquivos": ["b.md"], "introduz": ["b"], "menciona": [],
+         "retoma": [{"conceito": "Softmax", "episodio": 1}, {"conceito": "h", "episodio": 1}], "pontes": []}]}
+    assert any("no máximo 5" in e for e in planner.validar(plano, ["a.md", "b.md"]))
+    avisos: list[str] = []
+    serie = planner.consertar(plano, ["a.md", "b.md"], ["a.md", "b.md"], avisos)
+    ep1, ep2 = serie["episodios"]
+    assert ep1["introduz"] == list("cdefg") and ep1["menciona"] == ["h", "i", "softmax"]
+    assert ep2["retoma"] == [{"conceito": "Softmax", "episodio": 1}, {"conceito": "h", "episodio": 1}]
+    assert any("centrais" in a for a in avisos)
+
+
+def test_v3_um_grupo_por_conceito_teto_de_apoio_e_central_repetido_vira_retoma(tmp_path):
+    plano = {"titulo_serie": "S", "episodios": [
+        {"numero": 1, "titulo": "A", "arquivos": ["a.md"], "introduz": ["x"],
+         "menciona": ["X", *[f"t{i}" for i in range(12)]], "retoma": [], "pontes": []},
+        {"numero": 2, "titulo": "B", "arquivos": ["b.md"], "introduz": ["x", "y"], "menciona": [],
+         "retoma": [], "pontes": []}]}
+    avisos: list[str] = []
+    ep1, ep2 = planner.consertar(plano, ["a.md", "b.md"], ["a.md", "b.md"], avisos)["episodios"]
+    assert "X" not in ep1["menciona"] and len(ep1["menciona"]) == 8
+    assert ep2["introduz"] == ["y"] and {"conceito": "x", "episodio": 1} in ep2["retoma"]
+
+
+def test_descricao_do_arquivo_para_o_planejador_ignora_frontmatter(tmp_path):
+    criar_pasta(tmp_path, {"a.md": "---\ntags: [logit, softmax]\n---\n# Regressão\n\n## Sigmoid\ntexto " * 1})
+    d = planner._descricao(tmp_path / "a.md", "a.md")
+    assert "logit" not in d and "seções: Sigmoid" in d and "palavras" in d
+
+
+def test_situacao_separa_centrais_e_apoio(tmp_path):
+    pasta = criar_pasta(tmp_path, {"a.md": MATERIAL.format(t="A")})
+    ep = {"numero": 1, "titulo": "A", "arquivos": ["a.md"], "introduz": ["x"], "menciona": ["y", "z"]}
+    sit = writer.situacao(ep, {"episodios": [ep]}, pasta, {"palavras": {"min": 2000, "max": 3200}})
+    texto = writer._situacao_texto(sit)
+    assert "conceitos centrais (introduz): x" in texto and "conceitos de apoio (menciona): y; z" in texto
 
 
 def test_sanitizar_falavel_para_titulos():

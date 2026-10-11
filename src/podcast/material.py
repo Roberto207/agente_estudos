@@ -5,7 +5,9 @@ from pathlib import Path
 
 # D1 — o que NÃO é ".md de conteúdo".
 _DIRS_EXCLUIDOS = {"transcripts", "podcast", "html"}
-_ARQUIVOS_EXCLUIDOS = {"guia_de_estudos.md", "proximos_passos.md"}
+# Gerados pelos agentes (guia do criar-estudo, próximos passos, curadoria do buscar-fontes),
+# não material de estudo — fontes_selecionadas.md virava um "episódio" sobre a lista de links.
+_ARQUIVOS_EXCLUIDOS = {"guia_de_estudos.md", "proximos_passos.md", "fontes_selecionadas.md"}
 GUIA = "guia_de_estudos.md"
 LIMIAR_MATERIAL_CURTO = 1500  # D9
 

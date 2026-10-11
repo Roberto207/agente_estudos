@@ -11,9 +11,12 @@ from pathlib import Path
 
 from . import material
 from .comum import Envelope, ErroPodcast, carregar_prompt, sanitizar_falavel, titulo_do_md
+from .script_io import separar_frontmatter
 
 SERIE = "serie.json"
 _TENTATIVAS = 2  # reenvios com a lista de erros antes do conserto determinístico
+MAX_CENTRAIS = 5  # "introduz" (v3): o resto vai para "menciona"
+MAX_APOIO = 8     # "menciona" (v3): sem teto, 30 termos de glossário diluíam os centrais
 
 
 def caminho_serie(pasta: Path) -> Path:
@@ -75,9 +78,7 @@ def arquivar(pasta: Path) -> Path:
 def mensagem_planejamento(pasta: Path, arquivos: list[str]) -> str:
     """Entrada do planejador — a mesma para o Python e para o agente Claude."""
     env = Envelope()
-    lista = "\n".join(
-        f"- {rel} | {titulo_do_md(pasta / rel)} | {_inicio(pasta / rel)}" for rel in arquivos
-    )
+    lista = "\n".join(_descricao(pasta / rel, rel) for rel in arquivos)
     return "\n\n".join([
         env.cabecalho(),
         env.bloco("arquivos", lista),
@@ -106,10 +107,16 @@ def planejar(llm, cfg: dict, pasta: Path, arquivos: list[str], avisos: list[str]
     return consertar(plano, arquivos, ordem, avisos)
 
 
-def _inicio(md: Path, limite: int = 300) -> str:
-    texto = " ".join(l.strip() for l in md.read_text(encoding="utf-8").splitlines()
-                     if l.strip() and not l.startswith("#"))
-    return texto[:limite]
+def _descricao(md: Path, rel: str, limite: int = 300) -> str:
+    """Caminho | título | tamanho | seções | começo. As seções e o tamanho mostram o que o
+    arquivo DESENVOLVE (300 caracteres sozinhos faziam arquivo denso parecer curto); o
+    frontmatter YAML sai antes, senão as tags viravam "conceitos centrais"."""
+    _, corpo = separar_frontmatter(md.read_text(encoding="utf-8"))
+    linhas = corpo.splitlines()
+    secoes = [l.lstrip("#").strip() for l in linhas if l.startswith(("## ", "### "))][:15]
+    inicio = " ".join(l.strip() for l in linhas if l.strip() and not l.startswith("#"))[:limite]
+    return (f"- {rel} | {titulo_do_md(md)} | {len(corpo.split())} palavras"
+            f" | seções: {'; '.join(secoes) or '—'} | começo: {inicio}")
 
 
 def validar(plano, arquivos: list[str]) -> list[str]:
@@ -124,7 +131,10 @@ def validar(plano, arquivos: list[str]) -> list[str]:
             erros.append("todo episódio precisa de 'numero' inteiro")
             continue
         n = ep["numero"]
-        introduz[n] = {str(c).strip().casefold() for c in ep.get("introduz", [])}
+        introduz[n] = {str(c).strip().casefold() for c in ep.get("introduz", []) + ep.get("menciona", [])}
+        if len(ep.get("introduz", [])) > MAX_CENTRAIS:
+            erros.append(f"episódio {n}: {len(ep['introduz'])} conceitos em 'introduz' — no máximo "
+                         f"{MAX_CENTRAIS} centrais; mova os demais para 'menciona'")
         for a in ep.get("arquivos", []):
             if a not in arquivos:
                 erros.append(f"episódio {n}: arquivo inexistente {a!r}")
@@ -144,7 +154,7 @@ def validar(plano, arquivos: list[str]) -> list[str]:
         for r in ep.get("retoma", []):
             k, c = r.get("episodio"), str(r.get("conceito", "")).strip().casefold()
             if not isinstance(k, int) or k >= ep["numero"] or c not in introduz.get(k, set()):
-                erros.append(f"episódio {ep['numero']}: 'retoma' inválido {r} (precisa estar em 'introduz' de episódio anterior)")
+                erros.append(f"episódio {ep['numero']}: 'retoma' inválido {r} (precisa estar em 'introduz' ou 'menciona' de episódio anterior)")
     return erros
 
 
@@ -171,17 +181,45 @@ def consertar(plano, arquivos: list[str], ordem: list[str], avisos: list[str]) -
 
     resultado = []
     for i, ep in enumerate(episodios, start=1):
+        centrais = [str(c).strip() for c in ep.get("introduz", []) if str(c).strip()]
+        apoio = [str(c).strip() for c in ep.get("menciona", []) if str(c).strip()]
+        if len(centrais) > MAX_CENTRAIS:
+            avisos.append(f"episódio {i}: {len(centrais)} conceitos centrais; "
+                          f"os {len(centrais) - MAX_CENTRAIS} últimos foram para 'menciona'")
+            centrais, apoio = centrais[:MAX_CENTRAIS], centrais[MAX_CENTRAIS:] + apoio
+        # um conceito, um grupo
+        chaves = {c.casefold() for c in centrais}
+        apoio = [c for k, c in {c.casefold(): c for c in apoio}.items() if k not in chaves]
+        if len(apoio) > MAX_APOIO:
+            avisos.append(f"episódio {i}: {len(apoio)} conceitos de apoio; mantidos os {MAX_APOIO} primeiros")
+            apoio = apoio[:MAX_APOIO]
         resultado.append({
             "numero": i,
             "titulo": sanitizar_falavel(str(ep.get("titulo") or f"Episódio {i}")) or f"Episódio {i}",
             "arquivos": ep["arquivos"],
-            "introduz": [str(c).strip() for c in ep.get("introduz", []) if str(c).strip()],
+            "introduz": centrais,
+            "menciona": apoio,
             "retoma": [{"conceito": r.get("conceito"), "episodio": novo_de.get(r.get("episodio"))}
                        for r in ep.get("retoma", []) if isinstance(r, dict)],
             "pontes": [_remapear_ponte(p, novo_de) for p in ep.get("pontes", []) if isinstance(p, dict)],
         })
 
-    introduz = {ep["numero"]: {c.casefold() for c in ep["introduz"]} for ep in resultado}
+    # Central repetido de episódio anterior vira "retoma" (o redator não reensina do zero).
+    centrais_antes: dict[str, int] = {}
+    for ep in resultado:
+        novos = []
+        for c in ep["introduz"]:
+            k = centrais_antes.get(c.casefold())
+            if k is not None:
+                ep["retoma"].append({"conceito": c, "episodio": k})
+                avisos.append(f"episódio {ep['numero']}: {c!r} já era central no episódio {k}; virou 'retoma'")
+            else:
+                novos.append(c)
+        ep["introduz"] = novos
+        for c in novos:
+            centrais_antes[c.casefold()] = ep["numero"]
+
+    introduz = {ep["numero"]: {c.casefold() for c in ep["introduz"] + ep["menciona"]} for ep in resultado}
     episodio_do_arquivo = {a: ep["numero"] for ep in resultado for a in ep["arquivos"]}
     for ep in resultado:
         n = ep["numero"]

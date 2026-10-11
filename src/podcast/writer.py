@@ -14,7 +14,7 @@ _MAX_TOKENS = 8192
 
 def resumo_episodio(ep: dict, roteiro_path: Path | None) -> str:
     """Resumo DETERMINÍSTICO do que um episódio anterior cobriu: título, blocos
-    (se o roteiro já existe) e conceitos de "introduz" escritos exatamente como
+    (se o roteiro já existe) e conceitos de "introduz"/"menciona" escritos exatamente como
     o redator deve citá-los. Sem LLM: não soma chamada nem alucinação."""
     linhas = [f"Episódio {ep['numero']}: {ep['titulo']}"]
     if roteiro_path and roteiro_path.exists():
@@ -22,7 +22,9 @@ def resumo_episodio(ep: dict, roteiro_path: Path | None) -> str:
         if blocos:
             linhas.append("Blocos: " + "; ".join(blocos))
     if ep.get("introduz"):
-        linhas.append("Conceitos apresentados: " + "; ".join(ep["introduz"]))
+        linhas.append("Conceitos centrais: " + "; ".join(ep["introduz"]))
+    if ep.get("menciona"):
+        linhas.append("Também mencionados: " + "; ".join(ep["menciona"]))
     return "\n".join(linhas)
 
 
@@ -44,7 +46,8 @@ def pontes_filtradas(ep: dict, anteriores: dict[int, dict]) -> list[str]:
         saida.append(f"{alvo} — {p.get('ideia', '')}")
     for r in ep.get("retoma", []):
         k = r["episodio"]
-        conceitos = {c.casefold() for c in anteriores.get(k, {}).get("introduz", [])}
+        anterior = anteriores.get(k, {})
+        conceitos = {c.casefold() for c in anterior.get("introduz", []) + anterior.get("menciona", [])}
         if 0 < k < n and r["conceito"].casefold() in conceitos:
             saida.append(f"episodio:{k} — retomar o conceito {r['conceito']!r}")
     return saida
@@ -100,6 +103,7 @@ def situacao(ep: dict, serie: dict, pasta: Path, cfg: dict) -> dict:
         "palavras_material": palavras,
         "palavras_alvo": "o que o material sustentar" if curto else f"{faixa['min'] + 200} a {faixa['max'] - 200}",
         "introduz": ep.get("introduz", []),
+        "menciona": ep.get("menciona", []),
         "proximo_tema": sanitizar_falavel(proximo["titulo"]) if proximo else "",
     }
 
@@ -113,6 +117,7 @@ def _situacao_texto(s: dict) -> str:
         f"material curto: {sim(s['material_curto'])} ({s['palavras_material']} palavras de material)",
         f"palavras-alvo de fala: {s['palavras_alvo']}",
         "conceitos centrais (introduz): " + ("; ".join(s["introduz"]) or "—"),
+        "conceitos de apoio (menciona): " + ("; ".join(s["menciona"]) or "—"),
         f"tema do próximo episódio: {s['proximo_tema'] or '— (não há próximo)'}",
     ])
 

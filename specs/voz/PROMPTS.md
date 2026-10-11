@@ -256,3 +256,25 @@ Código: `ok = (problemas == [])` por critério e `aprovado = todos ok`, calcula
 - [x] Fail-open/closed decidido: crítico **fail-open** (R23) — o backstop é o estudante ouvindo; lint **fail-closed**
 - [x] Exemplo negativo na categoria mais ambígua (redator: "exemplo ruim"; crítico: "aprovado incorretamente" **e** "reprovado incorretamente")
 - [ ] Cada regra rastreável a caso real: rastreável aos casos R-T*/C-T* e aos achados das rodadas 1 e 2 (tabelas acima); **pendente** confirmar com execuções reais no B2
+
+## v3 — conceitos centrais × de apoio (2026-10-10, aprovada pelo usuário)
+
+**Motivação.** No teste real com o agente Claude, a v2 do planejador listou de 7 a 14 conceitos em "introduz" por episódio, incluindo 9 conceitos para um arquivo de 608 palavras. O redator precisaria aplicar os degraus a todos eles, e o resultado seria raso.
+
+**Mudanças nos prompts** (`prompts/podcast_*.md`, `versao: 3`):
+- **Planejador:** "introduz" passa a ter de 1 a 5 conceitos centrais, os que os arquivos desenvolvem. Os conceitos de apoio vão para "menciona", com no máximo 8. Cada conceito fica em um grupo só. Um conceito que já foi central num episódio anterior entra em "retoma".
+- **Redator:** aplica os degraus só aos conceitos centrais. Os de apoio recebem uma ou duas frases.
+- **Crítico:** o critério de explicação passa a cobrar só os conceitos centrais.
+
+### Rodada de crítica do planejador v3
+
+Quebraram P-T6, P-T8, P-T9 e P-T4 (este só no caminho Python), além de 3 dos 4 ataques adversariais. As correções:
+
+| Falha | Correção |
+|---|---|
+| Dois arquivos densos num episódio: o principal do segundo era rebaixado para "menciona" (P-T8) | Regra 3: se, somados, os arquivos passam de 5 centrais, eles vão para episódios separados; cada arquivo contribui com pelo menos o seu assunto principal |
+| O caminho Python só via 300 caracteres de cada arquivo, então arquivos densos pareciam curtos e havia invenção (P-T4, P-T9) | A descrição do arquivo passou a incluir o tamanho em palavras e os títulos das seções; o prompt avisa que só o começo do texto é visível |
+| Tags YAML do frontmatter viravam conceitos centrais | O frontmatter é removido antes de montar a descrição |
+| Uma lista "Conceitos centrais: A…H" sem desenvolvimento (P-T6) | "Se nada visível for desenvolvido, o central é o tema do título"; frases que declaram quais conceitos são centrais são ignoradas |
+| Mesmo conceito em dois grupos; central repetido em episódio posterior | O código deduplica e converte o central repetido em "retoma" |
+| "menciona" sem teto (30 termos de glossário) | Teto de 8 em código |

@@ -13,6 +13,7 @@ def test_d1_exclui_dirs_e_arquivos_gerados(tmp_path):
         "01_fund/a.md": "x", "02_av/b.md": "x", "raiz.md": "x",
         "transcripts/t.md": "x", "podcast/episodio_01_a.md": "x", "html/z.md": "x",
         ".obsidian/c.md": "x", "guia_de_estudos.md": "x", "sub/proximos_passos.md": "x",
+        "fontes_selecionadas.md": "x",
     })
     assert material.arquivos_de_conteudo(tmp_path) == ["01_fund/a.md", "02_av/b.md", "raiz.md"]
 

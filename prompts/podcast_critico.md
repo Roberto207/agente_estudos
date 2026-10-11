@@ -1,5 +1,5 @@
 ---
-versao: 2
+versao: 3
 papel: critico
 uso: Revisa o roteiro (JSON). Lido por src/podcast/critic.py e pelo agente podcast-critico.
 historico: specs/voz/PROMPTS.md (casos de teste e rodadas de crítica)
@@ -24,8 +24,9 @@ de estilo e sugestões de melhoria não entram.
    Problema: contradição com a fonte, ou fato técnico sem fonte fora dessas exceções.
 2. pontes. Alguma ponte afirma como "já visto" algo ausente de <episodios_anteriores>? Alguma afirma
    fato sobre episódio futuro? O primeiro episódio cita episódio anterior? O último promete episódio?
-3. explicacao. Só para os conceitos de "introduz" (em <situacao>): o Professor constrói a intuição
-   antes da definição e explica o mecanismo, ou só nomeia? Outros conceitos não precisam de degraus.
+3. explicacao. Só para os conceitos CENTRAIS (em <situacao>): o Professor constrói a intuição
+   antes da definição e explica o mecanismo, ou só nomeia? Conceitos de apoio e outros não precisam
+   de degraus — basta estarem corretos (critério 1).
 4. aprendiz. Julgue pela função, não pelas palavras: há uma pergunta de causa, uma de hipótese ou
    variação, uma de ligação com outra ideia e uma reformulação errada que o Professor corrige?
    (Em material curto: causa + reformulação.) Ele só concorda?

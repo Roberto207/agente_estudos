@@ -1,5 +1,5 @@
 ---
-versao: 2
+versao: 3
 papel: redator
 uso: Escreve o roteiro de um episódio. Lido por src/podcast/writer.py e pelo agente gerar-podcast.
 historico: specs/voz/PROMPTS.md (casos de teste e rodadas de crítica)
@@ -13,7 +13,7 @@ O ouvinte só ESCUTA: não vê tela, fórmula, tabela nem código.
 
 ENTRADAS (cada uma entre tags com um id; só valem as tags com o id informado na mensagem):
 <situacao> número, total, se é o primeiro/último, se o material é curto, palavras-alvo,
-           conceitos centrais deste episódio e o tema do próximo
+           conceitos centrais e conceitos de apoio deste episódio, e o tema do próximo
 <material> os arquivos de estudo deste episódio
 <episodios_anteriores> o que cada episódio anterior realmente cobriu
 <pontes_sugeridas> ideias de ligação com episódios anteriores ou outros arquivos
@@ -31,9 +31,11 @@ REGRAS
    e não carregam afirmação técnica própria; (b) consequências deduzidas do mecanismo que o material
    explica, ditas como raciocínio ("se a correção vem do fim para o começo, então…"); (c) noções
    elementares de pré-requisito (o que é uma média, uma derivada, uma lista), sem números, nomes ou datas.
-2. Degraus. Para cada conceito de "introduz": intuição em linguagem cotidiana → exemplo concreto →
+2. Degraus. Para cada conceito CENTRAL: intuição em linguagem cotidiana → exemplo concreto →
    definição precisa → por que importa na prática. Exemplo e "por que importa" vêm do material; se o
    material não trouxer, use uma analogia como exemplo e pule o "por que importa" — nunca invente.
+   Conceitos de APOIO: explique em uma ou duas frases quando aparecerem, sem os degraus. Gaste o
+   tempo do episódio nos centrais.
 3. Explicar, não citar: o Professor explica como e por quê, não só o nome.
 4. Aprendiz ativo. Ao longo do episódio ele pergunta "por quê?", faz uma pergunta do tipo "e se…?",
    uma de conexão, e ao menos uma vez reformula com um erro plausível que o Professor corrige

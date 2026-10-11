@@ -13,8 +13,8 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
 ## Definições (únicas — os requisitos apontam para cá)
 
 - **D1 · `.md` de conteúdo:** todo arquivo `*.md` sob `<p>`, em qualquer nível, exceto os que estão em
-  diretórios `transcripts/`, `podcast/`, `html/` ou ocultos (`.*`), e exceto `guia_de_estudos.md` e
-  `proximos_passos.md` em qualquer nível. Em `serie.json` os caminhos são relativos a `<p>`, com `/`.
+  diretórios `transcripts/`, `podcast/`, `html/` ou ocultos (`.*`), e exceto `guia_de_estudos.md`,
+  `proximos_passos.md` e `fontes_selecionadas.md` (gerados pelos agentes) em qualquer nível. Em `serie.json` os caminhos são relativos a `<p>`, com `/`.
 - **D2 · Ordem do guia:** existindo `<p>/guia_de_estudos.md`, é a ordem da primeira ocorrência de cada
   wikilink `[[nome]]` que resolve (pelo nome do arquivo sem extensão) para um `.md` de conteúdo; os
   demais `.md` de conteúdo vêm depois, em ordem alfabética de caminho. Sem guia, a ordem alfabética de caminho.
@@ -54,8 +54,8 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
 **Planejamento** ⚑ agrupamento livre, guiado pelo guia
 - R8. O sistema DEVE numerar os episódios pela posição D3.
 - R9. O sistema DEVE listar cada `.md` de conteúdo (D1) como fonte de exatamente um episódio em `serie.json`.
-- R10. O sistema DEVE gravar `serie.json` no schema `{titulo_serie, episodios: [{numero, titulo, arquivos, introduz, retoma: [{conceito, episodio}], pontes: [{alvo, ideia}]}]}`.
-- R11. Para todo item `retoma {conceito: c, episodio: k}` do episódio N, o sistema DEVE garantir `k < N` e `c ∈ introduz(k)` (D5); SE a resposta do planejador violar isso ENTÃO o sistema DEVE reenviar com o erro e, persistindo, remover o item inválido e registrar o aviso em `relatorio.json`.
+- R10. O sistema DEVE gravar `serie.json` no schema `{titulo_serie, episodios: [{numero, titulo, arquivos, introduz, menciona, retoma: [{conceito, episodio}], pontes: [{alvo, ideia}]}]}`, com no máximo 5 conceitos centrais em `introduz` (o excedente vai para `menciona`, com aviso).
+- R11. Para todo item `retoma {conceito: c, episodio: k}` do episódio N, o sistema DEVE garantir `k < N` e `c ∈ introduz(k) ∪ menciona(k)` (D5); SE a resposta do planejador violar isso ENTÃO o sistema DEVE reenviar com o erro e, persistindo, remover o item inválido e registrar o aviso em `relatorio.json`.
 
 **Roteiro — critérios verificáveis por código (lint)**
 - R12. O sistema DEVE gravar roteiros contendo apenas: frontmatter YAML no topo (D11), linhas `## <título>`, falas (D6) e linhas em branco.
@@ -119,6 +119,7 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
 
 ## Histórico
 
+- **v1.1 → v1.2** (teste real do caminho Claude): D1 exclui `fontes_selecionadas.md` (curadoria do `buscar-fontes`, não é material); planejador v3 separa conceitos `introduz` (1–5 centrais) de `menciona` (apoio) — R10 ganha `menciona`, R11 aceita `retoma` de conceito em `introduz ∪ menciona`.
 - **v1 → v1.1** (durante o build B1 e a rodada 2 de crítica dos prompts; esclarecimentos sem mudar o escopo aprovado):
   - D7 aceita a variante tipográfica da pontuação permitida (o próprio prompt e os modelos usam travessão e reticências);
   - R15 virou heurística verificável: "Bem-vindos ao episódio três" dentro do episódio 3 é legítimo, então só reprova menção com marcador de passado, episódio inexistente e "próximo episódio" no último;
