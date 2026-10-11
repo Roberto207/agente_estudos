@@ -37,11 +37,9 @@ class FileContentOut(BaseModel):
 
 class OutputsToggle(BaseModel):
     canvas: bool = True
-    html: bool = True
     flashcards: bool = True
     quiz: bool = True
     next_steps: bool = True
-    mapa_mental: bool = True
 
 
 class GenerateRequest(BaseModel):

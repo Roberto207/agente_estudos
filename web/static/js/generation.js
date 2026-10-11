@@ -59,6 +59,15 @@
     }
   }
 
+  function readOutputs() {
+    return {
+      canvas: form.output_canvas.checked,
+      flashcards: form.output_flashcards.checked,
+      quiz: form.output_quiz.checked,
+      next_steps: form.output_next_steps.checked,
+    };
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
@@ -72,14 +81,7 @@
       foco: fd.get("foco") || "",
       didatica: fd.get("didatica") || "",
       fontes,
-      outputs: {
-        html: form.output_html.checked,
-        canvas: form.output_canvas.checked,
-        flashcards: form.output_flashcards.checked,
-        quiz: form.output_quiz.checked,
-        mapa_mental: form.output_mapa_mental.checked,
-        next_steps: form.output_next_steps.checked,
-      },
+      outputs: readOutputs(),
     };
 
     logEl.innerHTML = "";
@@ -100,16 +102,9 @@
   const POSTPROCESS_IDLE_TEXT = "Apenas regenerar ferramentas (sem tema/fontes)";
 
   postprocessBtn.addEventListener("click", async () => {
-    const body = {
-      outputs: {
-        html: form.output_html.checked,
-        canvas: form.output_canvas.checked,
-        flashcards: form.output_flashcards.checked,
-        quiz: form.output_quiz.checked,
-        mapa_mental: form.output_mapa_mental.checked,
-        next_steps: form.output_next_steps.checked,
-      },
-    };
+    // O endpoint recebe OutputsToggle direto no corpo (campos no topo), não
+    // aninhado em `outputs` — aninhado, o Pydantic ignorava e ligava tudo.
+    const body = readOutputs();
 
     logEl.innerHTML = "";
     postprocessBtn.disabled = true;

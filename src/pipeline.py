@@ -9,7 +9,7 @@ Fases:
   5. Escrita dos arquivos .md
   6. Criação dos canvas Obsidian
   7. Criação do guia_de_estudos.md
-  8. Geração dos HTMLs
+  8. Pós-processamento (flashcards/quiz/próximos passos)
 """
 from __future__ import annotations
 import os
@@ -27,15 +27,12 @@ from .distiller import distill_source
 from .tools.web import web_search
 from .generators.content import plan_structure, research_topics, write_content_files, write_guia
 from .generators.canvas import write_canvas_files
-from .generators.html_gen import generate_html_files
-from .generators.visual_map import generate_visual_map
 from .postprocessing import run_postprocessing
 
-# Reproduz o comportamento histórico do pipeline: canvas/html/mapa mental sempre
-# ligados, flashcards/quiz/next_steps sempre desligados (o pipeline nunca os gerou).
+# Com a remoção dos HTMLs gerais (hub/conceitos/mapa mental), flashcards e quiz
+# passam a ser ligados por padrão — são o único material de revisão gerado.
 _DEFAULT_OUTPUTS = {
-    "canvas": True, "html": True, "mapa_mental": True,
-    "flashcards": False, "quiz": False, "next_steps": False,
+    "canvas": True, "flashcards": True, "quiz": True, "next_steps": False,
 }
 
 
@@ -138,32 +135,19 @@ def run(
     guia_path = write_guia(llm, pasta, tema, foco, structure)
     emit("phase", {"n": 7, "desc": "Guia de estudos", "paths": [guia_path]})
 
-    # ── Fase 8: HTML ──────────────────────────────────────────────────────────
-    html_paths: list[str] = []
-    if out["html"]:
-        _step(console, 8, "Gerando arquivos HTML", emit)
-        html_paths = generate_html_files(pasta, tema, foco, structure)
-        emit("phase", {"n": 8, "desc": "HTML", "paths": html_paths})
-
-    # ── Fase 9: Mapa Mental ───────────────────────────────────────────────────
-    visual_path = ""
-    if out["mapa_mental"]:
-        _step(console, 9, "Gerando mapa mental visual", emit)
-        visual_path = generate_visual_map(pasta, tema, structure)
-        emit("phase", {"n": 9, "desc": "Mapa mental", "paths": [visual_path]})
-
-    # ── Fase 10: Flashcards/Quiz/Próximos passos (opcional) ───────────────────
+    # ── Fase 8: Flashcards/Quiz/Próximos passos (opcional) ────────────────────
+    post: dict = {}
     if out["flashcards"] or out["quiz"] or out["next_steps"]:
-        _step(console, 10, "Pós-processamento (flashcards/quiz/próximos passos)", emit)
-        # canvas/html/mapa_mental já foram gerados acima (Fases 6/8/9) com o
-        # `structure` planejado de verdade — força desligado aqui pra não duplicar.
-        run_postprocessing(
+        _step(console, 8, "Pós-processamento (flashcards/quiz/próximos passos)", emit)
+        # o canvas já foi gerado acima (Fase 6) com o `structure` planejado de
+        # verdade — força desligado aqui pra não duplicar.
+        post = run_postprocessing(
             llm, pasta, tema=tema, foco=foco, on_event=on_event,
-            outputs={**out, "canvas": False, "html": False, "mapa_mental": False},
+            outputs={**out, "canvas": False},
         )
 
     # ── Relatório Final ───────────────────────────────────────────────────────
-    _print_report(console, pasta, written, html_paths, canvas_paths, transcript_paths, visual_path)
+    _print_report(console, written, canvas_paths, transcript_paths, post)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -242,27 +226,22 @@ def _print_structure(console: Console, structure: dict) -> None:
 
 def _print_report(
     console: Console,
-    pasta: str,
     md_files: list[str],
-    html_files: list[str],
     canvas_files: list[str],
     transcript_files: list[str],
-    visual_path: str = "",
+    post: dict,
 ) -> None:
-    index_path = os.path.join(pasta, "html", "index.html")
-    visual_line = (
-        f"[bold]Mapa mental:[/bold]\n[cyan]file://{os.path.abspath(visual_path)}[/cyan]\n\n"
-        if visual_path else ""
+    links = "".join(
+        f"[bold]{label}:[/bold]\n[cyan]file://{os.path.abspath(post[key])}[/cyan]\n"
+        for key, label in (("flashcards", "Flashcards"), ("quiz", "Quiz"))
+        if post.get(key)
     )
     console.print(Panel(
         f"[bold green]Concluído![/bold green]\n\n"
         f"[blue]Arquivos .md criados:[/blue] {len(md_files)}\n"
-        f"[blue]Arquivos HTML gerados:[/blue] {len(html_files)}\n"
         f"[blue]Canvas Obsidian:[/blue] {len(canvas_files)}\n"
-        f"[blue]Transcrições:[/blue] {len(transcript_files)}\n\n"
-        f"{visual_line}"
-        f"[bold]Abrir hub:[/bold]\n"
-        f"[cyan]file://{os.path.abspath(index_path)}[/cyan]",
+        f"[blue]Transcrições:[/blue] {len(transcript_files)}\n"
+        + (f"\n{links}" if links else ""),
         title="Relatório Final",
         border_style="green",
     ))

@@ -7,7 +7,6 @@ Sem sequência fixa — comportamento genuinamente agentico.
 """
 from __future__ import annotations
 import os
-from pathlib import Path
 from typing import Callable
 
 from rich.console import Console
@@ -35,12 +34,12 @@ _CREATION_TOOLS = {
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
-# HTML, canvas, flashcards, quiz, próximos-passos e mapa mental são TODOS gerados
-# deterministicamente em pós-processamento (src/postprocessing.py), não pelo LLM —
-# pedir pro modelo redigir documentos grandes (HTML/JSON) via tool call é frágil:
-# modelos mais fracos (ex: gpt-4o-mini) já produziram HTML com `\n` literal em vez
-# de quebra de linha real, ou simplesmente pularam o canvas. O LLM só cuida de
-# pesquisar, processar fontes e escrever markdown — o resto é Python confiável.
+# Canvas, flashcards, quiz e próximos-passos são TODOS gerados deterministicamente
+# em pós-processamento (src/postprocessing.py), não pelo LLM — pedir pro modelo
+# redigir documentos grandes (HTML/JSON) via tool call é frágil: modelos mais
+# fracos (ex: gpt-4o-mini) já produziram HTML com `\n` literal em vez de quebra de
+# linha real, ou simplesmente pularam o canvas. O LLM só cuida de pesquisar,
+# processar fontes e escrever markdown — o resto é Python confiável.
 _SYSTEM = """\
 Você é um agente especialista em criar estruturas de estudo de alta qualidade no vault Obsidian.
 Seu objetivo é produzir uma pasta de estudos completa e navegável a partir do tema e fontes fornecidos.
@@ -52,9 +51,9 @@ Seu trabalho é produzir:
 - `transcripts/` com os resumos de cada fonte processada
 - `guia_de_estudos.md` com ordem de leitura recomendada
 
-NOTA: Você NÃO precisa gerar HTML, canvas (.canvas), flashcards, quiz ou mapa mental — o
-sistema gera tudo isso automaticamente e de forma confiável a partir dos seus arquivos .md,
-depois que você terminar. Não tente criar esses arquivos.
+NOTA: Você NÃO precisa gerar HTML, canvas (.canvas), flashcards ou quiz — o sistema gera
+canvas, flashcards e quiz automaticamente a partir dos seus arquivos .md, depois que você
+terminar. Não tente criar esses arquivos.
 
 ## Padrão de Qualidade dos Arquivos .md
 
@@ -90,7 +89,6 @@ Conteúdo profundo e didático com tabelas, blocos de código e exemplos.
 ```
 
 Os três níveis (TL;DR, Resumo, Conteúdo Completo) permitem ao estudante escolher a profundidade.
-O HTML gerado pelo sistema apresentará tabs "⚡ Rápido / 📖 Médio / 📚 Completo" automaticamente.
 
 ## Processo Recomendado
 
@@ -119,8 +117,8 @@ def run(
     on_event: Callable[[str, dict], None] | None = None,
     outputs: dict | None = None,
 ) -> None:
-    """`on_event(event_type, payload)` e `outputs` (toggles de canvas/html/
-    flashcards/quiz/mapa_mental) são opcionais e aditivos — chamadas existentes
+    """`on_event(event_type, payload)` e `outputs` (toggles de canvas/
+    flashcards/quiz/next_steps) são opcionais e aditivos — chamadas existentes
     sem esses parâmetros mantêm o comportamento de hoje inalterado.
     """
     emit = on_event or (lambda *a, **k: None)
@@ -217,11 +215,11 @@ def run(
         f"\n[dim]Total de chamadas de ferramentas: {total_tool_calls} em {iteration} iterações[/dim]"
     )
 
-    run_postprocessing(llm, pasta, tema=tema, foco=foco, on_event=on_event, outputs=outputs)
+    post = run_postprocessing(llm, pasta, tema=tema, foco=foco, on_event=on_event, outputs=outputs)
 
-    index_path = os.path.join(pasta, "html", "index.html")
-    if Path(index_path).exists():
-        console.print(f"\n[bold]Abrir hub:[/bold] [cyan]file://{os.path.abspath(index_path)}[/cyan]")
+    for key, label in (("flashcards", "Flashcards"), ("quiz", "Quiz")):
+        if post.get(key):
+            console.print(f"[bold]{label}:[/bold] [cyan]file://{os.path.abspath(post[key])}[/cyan]")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
