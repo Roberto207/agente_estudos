@@ -57,6 +57,9 @@ app = typer.Typer(
 )
 console = Console()
 
+# Modos que trabalham sobre uma pasta já gerada — não pedem tema.
+_MODOS_SEM_TEMA = ("postprocess", "podcast")
+
 _CONFIG_PATHS = [
     Path("config.yaml"),
     Path(__file__).parent / "config.yaml",
@@ -72,8 +75,10 @@ def main(
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
     config_path: str = typer.Option("", "--config", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
-    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas/html/mapa mental sobre pasta existente)"),
+    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas sobre pasta existente) | podcast (roteiros de podcast sobre pasta existente)"),
     apenas: list[str] = typer.Option([], "--apenas", "-a", help="Restringe outputs no modo postprocess: flashcards, quiz, next_steps, canvas (repita: --apenas quiz --apenas flashcards). Vazio = todos."),
+    replanejar: bool = typer.Option(False, "--replanejar", help="Modo podcast: arquiva serie.json e roteiros atuais em podcast/arquivo/ e planeja a série de novo"),
+    episodios: str = typer.Option("", "--episodios", help="Modo podcast: regera só estes episódios (ex.: 2,5)"),
     chat: bool = typer.Option(False, "--chat", "-c", help="Abre chat interativo sobre a pasta de estudos"),
     chat_mode: str = typer.Option("qa", "--chat-mode", help="Modo do chat: qa (NotebookLM) | socratico"),
 ):
@@ -92,12 +97,27 @@ def main(
         return
 
     # ── Modo geração ─────────────────────────────────────────────────────────
-    if interactive or (mode != "postprocess" and not tema):
+    if interactive or (mode not in _MODOS_SEM_TEMA and not tema):
         tema, foco, didatica, pasta, fontes = _interactive_prompt(tema, foco, didatica, pasta, fontes)
 
     _validate_inputs(tema, pasta, config, mode=mode)
 
     pasta = str(Path(pasta).expanduser().resolve())
+
+    if mode == "podcast":
+        from src.podcast.comum import ErroPodcast
+        from src.podcast.run import run as podcast_run
+        try:
+            nums = [int(x) for x in episodios.replace(" ", "").split(",") if x] if episodios else None
+        except ValueError:
+            console.print(f"[red]--episodios inválido: {episodios!r} (use números separados por vírgula, ex.: 2,5)[/red]")
+            raise typer.Exit(1)
+        try:
+            podcast_run(config, pasta, replanejar=replanejar, episodios=nums)
+        except ErroPodcast as exc:
+            console.print(f"[red]✗[/red] {exc}")
+            raise typer.Exit(1)
+        return
 
     if mode == "postprocess":
         from src.llm import LLMClient
@@ -207,7 +227,7 @@ def _config_from_env() -> dict:
 
 def _validate_inputs(tema: str, pasta: str, config: dict, mode: str = "agent") -> None:
     errors = []
-    if mode != "postprocess" and not tema.strip():
+    if mode not in _MODOS_SEM_TEMA and not tema.strip():
         errors.append("--tema é obrigatório")
     if not pasta.strip():
         errors.append("--pasta é obrigatório")

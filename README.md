@@ -230,6 +230,8 @@ Dentro do chat, os comandos disponíveis são:
 
 **`--mode postprocess`**: regenera flashcards, quiz, próximos passos e canvas sobre uma pasta já existente, sem tema nem fontes.
 
+**`--mode podcast`** (em construção — spec em `specs/voz/`): sobre uma pasta já gerada, planeja uma série de episódios (`podcast/serie.json`) e escreve roteiros em diálogo Professor/Aprendiz (`podcast/episodio_NN_<tema>.md`), passando cada um por um lint determinístico e por um crítico LLM. `--episodios 2,5` regera episódios específicos; `--replanejar` arquiva a série atual e planeja de novo. A síntese de áudio (estágio 2) ainda não está implementada.
+
 ### Rodar no Kaggle / Colab (LLM maior, sem custo)
 
 Modelos Ollama pequenos (1B–3B) geram material curto e JSON quebrado. O notebook [`notebooks/gerar_estudo.ipynb`](notebooks/gerar_estudo.ipynb) roda o mesmo pipeline numa GPU gratuita e devolve a pasta zipada:

@@ -28,11 +28,14 @@ class LLMClient:
         messages: list[dict],
         system: str | None = None,
         max_tokens: int = 8192,
+        temperature: float | None = None,
     ) -> str:
+        """`temperature` sobrescreve a do provider só nesta chamada — usado pelos
+        gates centrais de temperatura (ex.: `podcast.temperaturas`)."""
         if self.provider == "anthropic":
-            return self._anthropic_chat(messages, system, max_tokens)
+            return self._anthropic_chat(messages, system, max_tokens, temperature)
         if self.provider in ("openai", "groq", "ollama"):
-            return self._openai_compat_chat(messages, system, max_tokens)
+            return self._openai_compat_chat(messages, system, max_tokens, temperature)
         raise ValueError(f"Provider desconhecido: {self.provider}. Use: anthropic | openai | groq | ollama")
 
     def chat_json(
@@ -40,6 +43,7 @@ class LLMClient:
         messages: list[dict],
         system: str | None = None,
         max_tokens: int = 8192,
+        temperature: float | None = None,
     ) -> Any:
         """Como `chat`, mas devolve o JSON da resposta. Se o JSON vier
         malformado (comum em modelos pequenos), reenvia a conversa com o erro e
@@ -47,7 +51,7 @@ class LLMClient:
         retries = int(self.config.get("json_retries", 2))
         msgs = list(messages)
         for attempt in range(retries + 1):
-            response = self.chat(msgs, system, max_tokens)
+            response = self.chat(msgs, system, max_tokens, temperature)
             try:
                 return _extract_json(response)
             except (ValueError, json.JSONDecodeError) as exc:
@@ -78,7 +82,9 @@ class LLMClient:
 
     # ── Anthropic ────────────────────────────────────────────────────────────
 
-    def _anthropic_chat(self, messages: list[dict], system: str | None, max_tokens: int) -> str:
+    def _anthropic_chat(
+        self, messages: list[dict], system: str | None, max_tokens: int, temperature: float | None = None,
+    ) -> str:
         import anthropic
 
         cfg = self.config.get("anthropic", {})
@@ -91,8 +97,9 @@ class LLMClient:
         if system:
             kwargs["system"] = system
 
-        if "temperature" in cfg:
-            kwargs["temperature"] = cfg["temperature"]
+        temp = temperature if temperature is not None else cfg.get("temperature")
+        if temp is not None:
+            kwargs["temperature"] = temp
 
         resp = client.messages.create(**kwargs)
         return resp.content[0].text
@@ -140,7 +147,9 @@ class LLMClient:
 
     # ── OpenAI / Groq / Ollama (API compatível) ───────────────────────────────
 
-    def _openai_compat_chat(self, messages: list[dict], system: str | None, max_tokens: int) -> str:
+    def _openai_compat_chat(
+        self, messages: list[dict], system: str | None, max_tokens: int, temperature: float | None = None,
+    ) -> str:
         cfg = self.config.get(self.provider, {})
         client = self._make_openai_client(cfg)
         model = _model(cfg, "gpt-4o")
@@ -150,7 +159,8 @@ class LLMClient:
             msgs.append({"role": "system", "content": system})
         msgs.extend(messages)
 
-        extra = {"temperature": cfg["temperature"]} if "temperature" in cfg else {}
+        temp = temperature if temperature is not None else cfg.get("temperature")
+        extra = {"temperature": temp} if temp is not None else {}
         resp = client.chat.completions.create(
             model=model,
             messages=msgs,

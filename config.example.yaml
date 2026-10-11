@@ -35,6 +35,16 @@ content:
   min_words: 900           # arquivo .md abaixo disso é reescrito (o prompt pede 1400)
   rewrite_attempts: 1      # 0 desliga a reescrita
 
+# ── Podcast de estudo (python main.py --mode podcast --pasta <pasta>) ──
+# Spec: specs/voz/. Prompts: prompts/podcast_*.md
+podcast:
+  palavras: {min: 2000, max: 3200}   # faixa de palavras de fala por episódio (lint)
+  max_chars_material: 24000          # orçamento de material por chamada do redator
+  rag_raiz: ""                       # ex. ~/obsidian — pontes com outras pastas, só se o índice RAG já existir
+  rag_k: 5
+  temperaturas: {planejador: 0.3, redator: 0.8, critico: 0.1}
+  reescritas: 1                      # reescritas guiadas pelo crítico (0 desliga)
+
 # ── Transcrição de Vídeo ─────────────────────────────────────
 # Como transcrever vídeos locais (YouTube usa yt-dlp automaticamente)
 # auto: tenta groq, depois local, depois nenhum
