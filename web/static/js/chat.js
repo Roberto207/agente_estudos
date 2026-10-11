@@ -5,10 +5,18 @@
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-input");
   const clearBtn = document.getElementById("chat-clear");
+  const settingsBtn = document.getElementById("chat-settings");
+  const settingsModal = document.getElementById("chat-settings-modal");
+  const settingsBackdrop = document.getElementById("chat-settings-backdrop");
+  const settingsClose = document.getElementById("chat-settings-close");
+  const settingsCancel = document.getElementById("chat-settings-cancel");
+  const settingsSave = document.getElementById("chat-settings-save");
+  const modelSelect = document.getElementById("chat-model-select");
   const modeBtns = [document.getElementById("chat-mode-qa"), document.getElementById("chat-mode-socratico")];
 
   let history = [];
   let mode = "qa";
+  let selectedModel = "";
 
   function escapeHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -55,7 +63,7 @@
 
     try {
       const { reply } = await EstudAI.api.post(`/api/spaces/${spaceId}/chat`, {
-        message, mode, history,
+        message, mode, history, model_override: selectedModel,
       });
       thinking.innerHTML = escapeHtml(reply).replace(/\n/g, "<br>");
       history.push({ role: "user", content: message });
@@ -65,4 +73,49 @@
       thinking.classList.add("text-danger");
     }
   });
+
+  // ── Configurações de Modelo ───────────────────────────────────────────────────
+  async function loadModels() {
+    try {
+      const { provider, models } = await EstudAI.api.get("/api/models");
+
+      modelSelect.innerHTML = '<option value="">Padrão (config.yaml)</option>';
+      for (const [prov, model] of Object.entries(models)) {
+        const option = document.createElement("option");
+        option.value = model;
+        option.textContent = `${prov}: ${model}`;
+        if (prov === provider) option.textContent += " (ativo)";
+        modelSelect.appendChild(option);
+      }
+
+      // Carregar modelo salvo no localStorage
+      selectedModel = localStorage.getItem("chat-selected-model") || "";
+      modelSelect.value = selectedModel;
+    } catch (err) {
+      console.error("Erro ao carregar modelos:", err);
+    }
+  }
+
+  function openSettingsModal() {
+    modelSelect.value = selectedModel;
+    settingsModal.style.display = "flex";
+  }
+
+  function closeSettingsModal() {
+    settingsModal.style.display = "none";
+  }
+
+  settingsBtn.addEventListener("click", openSettingsModal);
+  settingsClose.addEventListener("click", closeSettingsModal);
+  settingsCancel.addEventListener("click", closeSettingsModal);
+  settingsBackdrop.addEventListener("click", closeSettingsModal);
+
+  settingsSave.addEventListener("click", () => {
+    selectedModel = modelSelect.value;
+    localStorage.setItem("chat-selected-model", selectedModel);
+    closeSettingsModal();
+  });
+
+  // Carregar modelos ao inicializar
+  loadModels();
 })();

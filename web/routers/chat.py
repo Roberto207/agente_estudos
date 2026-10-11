@@ -2,7 +2,7 @@
 segundos, não minutos; ver limitação de streaming documentada no plano)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from .. import deps
 from ..schemas import ChatRequest
@@ -10,6 +10,33 @@ from ..schemas import ChatRequest
 router = APIRouter()
 
 _MAX_HISTORY = 20
+
+
+@router.get("/api/models")
+def api_get_models(config: dict = Depends(lambda: deps.load_config())):
+    """Retorna os modelos disponíveis de cada provider no config.yaml."""
+    models = {}
+
+    # Anthropic
+    if "anthropic" in config and "model" in config["anthropic"]:
+        models["anthropic"] = config["anthropic"]["model"]
+
+    # OpenAI
+    if "openai" in config and "model" in config["openai"]:
+        models["openai"] = config["openai"]["model"]
+
+    # Groq
+    if "groq" in config and "model" in config["groq"]:
+        models["groq"] = config["groq"]["model"]
+
+    # Ollama
+    if "ollama" in config and "model" in config["ollama"]:
+        models["ollama"] = config["ollama"]["model"]
+
+    return {
+        "provider": config.get("provider", "anthropic"),
+        "models": models,
+    }
 
 
 @router.post("/api/spaces/{space_id}/chat")
@@ -29,6 +56,11 @@ def api_chat(space_id: str, body: ChatRequest):
 
     config = deps.load_config()
     provider = config.get("provider", "anthropic")
+
+    # Permitir override do modelo via interface (armazenado em localStorage)
+    if body.model_override:
+        config[provider]["model"] = body.model_override
+
     chat_config = {**config, "_rag_pasta": str(space_path)}
     tools = get_tools_for_provider(provider, names={"search_vault"})
     system = SYSTEM_QA if body.mode == "qa" else SYSTEM_SOCRATICO

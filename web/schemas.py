@@ -73,6 +73,7 @@ class ChatRequest(BaseModel):
     message: str
     mode: str = "qa"
     history: list[dict] = []
+    model_override: str = ""
 
 
 class JobStatusOut(BaseModel):

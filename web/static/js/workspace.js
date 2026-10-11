@@ -19,7 +19,7 @@
       currentFilePath = path;
       currentFileRaw = data.raw;
       renderFileContent(data.raw, data.html);
-      fileActions.classList.remove("hidden");
+      fileActions.style.display = "flex";
       setViewMode();
       highlightActiveFile(path);
     } catch (err) {
@@ -91,7 +91,7 @@
       );
       currentFilePath = null;
       currentFileRaw = null;
-      fileActions.classList.add("hidden");
+      fileActions.style.display = "none";
       contentBody.innerHTML = '<div class="text-muted text-sm">Arquivo apagado.</div>';
       await refreshTree();
     } catch (err) {
@@ -242,7 +242,7 @@
         if (currentFilePath === path) {
           currentFilePath = null;
           currentFileRaw = null;
-          fileActions.classList.add("hidden");
+          fileActions.style.display = "none";
           contentBody.innerHTML = '<div class="text-muted text-sm">Arquivo apagado.</div>';
         }
         await refreshTree();

@@ -9,7 +9,9 @@
 .workspace-grid {
   display: grid;
   grid-template-columns: 260px 1fr 380px;
+  grid-template-rows: 1fr;
   height: calc(100vh - 56px);
+  overflow: hidden;
 }
 
 @media (max-width: 1024px) {
