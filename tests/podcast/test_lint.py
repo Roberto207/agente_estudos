@@ -77,7 +77,9 @@ def test_l5_elogio_vazio_vale_para_os_dois_papeis():
     assert "L5" in _codigos(_roteiro("[Professor]: Ótima pergunta!"))
     assert "L5" in _codigos(_roteiro("[Aprendiz]: Boa pergunta, eu também queria saber."))
     assert "L5" in _codigos(_roteiro("[Professor]: Boa dúvida de engenheiro."))
-    assert "L5" in _codigos(_roteiro("[Professor]: Que observação interessante."))
+    # falsos positivos achados no teste real:
+    assert "L5" not in _codigos(_roteiro("[Professor]: Veja que pergunta você está fazendo agora."))
+    assert "L5" not in _codigos(_roteiro("[Professor]: A grande questão é o custo."))
 
 
 def test_l7_aprendiz_sem_por_que_e_sem_e_se():

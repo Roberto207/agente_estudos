@@ -215,9 +215,24 @@ def test_pontes_filtradas_some_futuro_e_retomada_sem_base():
           "retoma": [{"conceito": "dropout", "episodio": 2}, {"conceito": "Gradiente", "episodio": 1}]}
     anteriores = {1: {"introduz": ["gradiente"]}, 2: {"introduz": ["regularização"]}}
     saida = writer.pontes_filtradas(ep, anteriores)
+    assert not any("arquivo:x.md" in s for s in saida)        # x.md não é de episódio anterior
     assert not any("episodio:4" in s for s in saida)
     assert not any("dropout" in s for s in saida)
     assert any("Gradiente" in s for s in saida)
+
+
+def test_planejador_remove_ponte_para_arquivo_de_episodio_futuro(tmp_path):
+    criar_pasta(tmp_path, {"a.md": "# A\nx", "b.md": "# B\nx"}, guia="[[a]] [[b]]")
+    plano = {"titulo_serie": "S", "episodios": [
+        {"numero": 1, "titulo": "A", "arquivos": ["a.md"], "introduz": ["a"], "retoma": [],
+         "pontes": [{"alvo": "arquivo:b.md", "ideia": "futuro"}]},
+        {"numero": 2, "titulo": "B", "arquivos": ["b.md"], "introduz": ["b"], "retoma": [],
+         "pontes": [{"alvo": "arquivo:a.md", "ideia": "passado"}]}]}
+    avisos: list[str] = []
+    serie = planner.consertar(plano, ["a.md", "b.md"], ["a.md", "b.md"], avisos)
+    assert serie["episodios"][0]["pontes"] == []
+    assert serie["episodios"][1]["pontes"] == [{"alvo": "arquivo:a.md", "ideia": "passado"}]
+    assert any("b.md" in a for a in avisos)
 
 
 def test_sanitizar_falavel_para_titulos():

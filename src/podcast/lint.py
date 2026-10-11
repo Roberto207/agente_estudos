@@ -30,7 +30,9 @@ _PONTO_ENTRE_LETRAS = re.compile(r"[^\W\d_]\.[^\W\d_]")  # loss.backward, np.arr
 # R17 — elogio à pergunta/dúvida, em qualquer papel (inclui as variações que um
 # exemplo de prompt mal escolhido ensinou: "boa dúvida", "bela observação").
 _BORDOES = re.compile(
-    r"\b(ótima|ótimo|excelente|boa|bom|bela|belo|grande|que) (pergunta|dúvida|observação|questão|ponto)\b",
+    # Sem "que" e "grande": "veja que pergunta você está fazendo" e "a grande questão
+    # é…" são falas legítimas (falso positivo achado no teste real do agente Claude).
+    r"\b(ótima|ótimo|excelente|boa|bom|bela|belo) (pergunta|dúvida|observação|questão|ponto)\b",
     re.IGNORECASE,
 )
 

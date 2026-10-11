@@ -10,8 +10,19 @@
 | B2 — planner, writer, critic, `--mode podcast`, `relatorio.json`, `temperature` por chamada no `LLMClient`, prompts v2 em `prompts/` | ✅ código + testes com LLM falso (55 testes no total) | ⚠️ **não rodado contra modelo real**: as chaves OpenAI e Groq do `config.yaml` local devolveram 401 (inválidas) em 2026-10-10 |
 | B3 — `src/tts` (edge), montagem, cache, `voice-test` | ⏳ pendente | — |
 | B4 — xtts / chatterbox / qwen3 + `notebooks/podcast_audio.ipynb` | ⏳ pendente | — |
-| B5 — agentes `gerar-podcast` e `podcast-critico` + Fase 8 do `criar-estudo` | ⏳ pendente | — |
+| B5 — agentes `gerar-podcast` e `podcast-critico` + Fase 8 do `criar-estudo` + CLI `src.podcast.agente` | ✅ feito | ✅ **testado com o agente Claude real** (2026-10-10): série de 5 episódios planejada (válida na 1ª tentativa); episódios 1 e 2 gerados, lint e crítica aprovados; o crítico pegou um erro real de fidelidade no ep. 2 e a reescrita corrigiu |
 | B6 — README final, changelog dos prompts | ⏳ parcial (README menciona o modo como "em construção") | — |
+
+## Teste real do caminho Claude (B5) — achados corrigidos
+
+Cópia de `~/obsidian/machine_learning/alura_modelos_tradicionais_classificacao` no scratchpad, fora do vault. Os achados do teste e o que mudou:
+
+- **Lint L5 com falso positivo** em "veja que pergunta você está fazendo": "que" e "grande" saíram da lista de elogios.
+- **Ponte do planejador para arquivo de episódio futuro** (ep. 1 → arquivo do ep. 4): agora é removida em código no `consertar` e no `pontes_filtradas`.
+- **`--reescritas` ambíguo:** passou a ser o total de reescritas (lint + crítico), como no Python.
+- **Reescrita "completa" × "só o trecho":** a regra agora é gravar o arquivo inteiro e mudar só o necessário.
+- **`commit` no frontmatter não refletia código não commitado:** agora usa `git describe --always --dirty`.
+- **Observado, sem mudança:** o planejador listou de 7 a 14 conceitos em "introduz" por episódio, e o crítico aprovou assim mesmo. Fica a avaliar se a v3 do prompt do planejador deve limitar a quantidade.
 
 ## Como verificar o B2 com um modelo real (pendente)
 

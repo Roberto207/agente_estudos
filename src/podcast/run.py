@@ -104,8 +104,20 @@ def gerar_episodio(llm, config: dict, cfg: dict, pasta: Path, serie: dict, ep: d
             critica = "aprovado" if resultado_critico["aprovado"] else "reprovado"
 
     provider, modelo = provider_e_modelo(config)
+    fm = frontmatter(texto, ep, serie, pasta, res, critica, resultado_critico, reescritas,
+                     rag_usados, provider, modelo, gerado_por="python")
+    destino = roteiros[ep["numero"]]
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(dump(fm, texto), encoding="utf-8")
+    return fm
+
+
+def frontmatter(texto: str, ep: dict, serie: dict, pasta: Path, res, critica: str,
+                resultado_critico: dict | None, reescritas: int, rag_usados: list[str],
+                provider: str, modelo: str, gerado_por: str) -> dict:
+    """Frontmatter D11 — único para o caminho Python e o do agente Claude (R38)."""
     palavras = parse(texto).palavras
-    fm = {
+    return {
         "episodio": ep["numero"],
         "titulo": ep["titulo"],
         "fontes": ep["arquivos"],
@@ -114,7 +126,7 @@ def gerar_episodio(llm, config: dict, cfg: dict, pasta: Path, serie: dict, ep: d
         "prompts": {nome: carregar_prompt(nome)[1] for nome in ("planejador", "redator", "critico")},
         "provider": provider,
         "modelo": modelo,
-        "gerado_por": "python",
+        "gerado_por": gerado_por,
         "commit": _commit(),
         "data": datetime.now().astimezone().isoformat(timespec="seconds"),
         "palavras": palavras,
@@ -125,10 +137,6 @@ def gerar_episodio(llm, config: dict, cfg: dict, pasta: Path, serie: dict, ep: d
         "critica_problemas": critic.problemas_planos(resultado_critico) if resultado_critico else [],
         "reescritas": reescritas,
     }
-    destino = roteiros[ep["numero"]]
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(dump(fm, texto), encoding="utf-8")
-    return fm
 
 
 def _violacoes(res) -> str:
@@ -140,7 +148,8 @@ def _violacoes(res) -> str:
 def _commit() -> str:
     try:
         raiz = Path(__file__).resolve().parents[2]
-        return subprocess.run(["git", "-C", str(raiz), "rev-parse", "--short", "HEAD"],
+        # --dirty: o código que rodou tinha mudanças não commitadas (o hash sozinho mentiria).
+        return subprocess.run(["git", "-C", str(raiz), "describe", "--always", "--dirty"],
                               capture_output=True, text=True, timeout=5).stdout.strip()
     except Exception:
         return ""
@@ -148,13 +157,16 @@ def _commit() -> str:
 
 def _gravar_relatorio(podcast: Path, config: dict, linhas: list[dict], avisos: list[str]) -> dict:
     """R24: acrescenta esta execução a podcast/relatorio.json."""
+    return gravar_relatorio(podcast, *provider_e_modelo(config), linhas, avisos)
+
+
+def gravar_relatorio(podcast: Path, provider: str, modelo: str, linhas: list[dict], avisos: list[str]) -> dict:
     caminho = podcast / "relatorio.json"
     podcast.mkdir(parents=True, exist_ok=True)
     try:
         historico = json.loads(caminho.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         historico = {"execucoes": []}
-    provider, modelo = provider_e_modelo(config)
     execucao = {"data": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "provider": provider, "modelo": modelo, "avisos": avisos, "episodios": linhas}
     historico["execucoes"].append(execucao)

@@ -27,9 +27,11 @@ def resumo_episodio(ep: dict, roteiro_path: Path | None) -> str:
 
 
 def pontes_filtradas(ep: dict, anteriores: dict[int, dict]) -> list[str]:
-    """Some (a) ponte para episódio ≥ N e (b) "retomada" cujo conceito não está
-    nos conceitos do episódio citado (o caso do 'dropout que nunca foi visto')."""
+    """Some (a) ponte para episódio ≥ N ou para arquivo que não é de episódio
+    anterior (série planejada antes desta regra) e (b) "retomada" cujo conceito
+    não está nos conceitos do episódio citado (o 'dropout que nunca foi visto')."""
     n = ep["numero"]
+    de_anteriores = {a for e in anteriores.values() for a in e.get("arquivos", [])}
     saida = []
     for p in ep.get("pontes", []):
         alvo = p["alvo"]
@@ -37,6 +39,8 @@ def pontes_filtradas(ep: dict, anteriores: dict[int, dict]) -> list[str]:
             k = int(alvo[9:]) if alvo[9:].isdigit() else 0
             if not 0 < k < n:
                 continue
+        elif alvo.startswith("arquivo:") and alvo[8:] not in de_anteriores:
+            continue
         saida.append(f"{alvo} — {p.get('ideia', '')}")
     for r in ep.get("retoma", []):
         k = r["episodio"]

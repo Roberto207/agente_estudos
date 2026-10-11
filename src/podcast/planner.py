@@ -72,18 +72,23 @@ def arquivar(pasta: Path) -> Path:
     return destino
 
 
-def planejar(llm, cfg: dict, pasta: Path, arquivos: list[str], avisos: list[str]) -> dict:
-    system, _ = carregar_prompt("planejador")
-    ordem = material.ordem_do_guia(pasta, arquivos)
+def mensagem_planejamento(pasta: Path, arquivos: list[str]) -> str:
+    """Entrada do planejador — a mesma para o Python e para o agente Claude."""
     env = Envelope()
     lista = "\n".join(
         f"- {rel} | {titulo_do_md(pasta / rel)} | {_inicio(pasta / rel)}" for rel in arquivos
     )
-    msgs = [{"role": "user", "content": "\n\n".join([
+    return "\n\n".join([
         env.cabecalho(),
         env.bloco("arquivos", lista),
-        env.bloco("ordem_do_guia", "\n".join(ordem)),
-    ])}]
+        env.bloco("ordem_do_guia", "\n".join(material.ordem_do_guia(pasta, arquivos))),
+    ])
+
+
+def planejar(llm, cfg: dict, pasta: Path, arquivos: list[str], avisos: list[str]) -> dict:
+    system, _ = carregar_prompt("planejador")
+    ordem = material.ordem_do_guia(pasta, arquivos)
+    msgs = [{"role": "user", "content": mensagem_planejamento(pasta, arquivos)}]
 
     plano: dict = {}
     for tentativa in range(_TENTATIVAS + 1):
@@ -177,6 +182,7 @@ def consertar(plano, arquivos: list[str], ordem: list[str], avisos: list[str]) -
         })
 
     introduz = {ep["numero"]: {c.casefold() for c in ep["introduz"]} for ep in resultado}
+    episodio_do_arquivo = {a: ep["numero"] for ep in resultado for a in ep["arquivos"]}
     for ep in resultado:
         n = ep["numero"]
         validos = []
@@ -194,6 +200,10 @@ def consertar(plano, arquivos: list[str], ordem: list[str], avisos: list[str]) -
                 avisos.append(f"episódio {n}: ponte para {alvo} removida (só pontes para trás)")
             elif alvo.startswith("arquivo:") and alvo[8:] not in arquivos:
                 avisos.append(f"episódio {n}: ponte para arquivo inexistente {alvo[8:]!r} removida")
+            elif alvo.startswith("arquivo:") and episodio_do_arquivo.get(alvo[8:], 0) >= n:
+                # arquivo deste episódio ou de um futuro: o redator não tem base para a ponte
+                avisos.append(f"episódio {n}: ponte para {alvo[8:]!r} (episódio "
+                              f"{episodio_do_arquivo[alvo[8:]]}) removida (só pontes para trás)")
             else:
                 pontes.append({"alvo": alvo, "ideia": " ".join(str(p.get("ideia", "")).split()[:20])})
         ep["pontes"] = pontes

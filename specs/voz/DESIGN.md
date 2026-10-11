@@ -77,16 +77,30 @@ Os nomes de voz dos engines open-source são preenchidos no B4, depois de inspec
 
 ## 4. Lado Claude (agentes) — R38
 
-- **`~/.claude/agents/gerar-podcast.md`** (redator, sub-agente): recebe o plano do episódio e os caminhos dos `.md`, **lê `prompts/podcast_redator.md`** como instrução e grava o roteiro. Depois roda `python -m src.podcast.lint` e corrige uma vez se o lint reprovar.
-- **`~/.claude/agents/podcast-critico.md`** (verificador, sub-agente): lê `prompts/podcast_critico.md` e devolve o JSON do crítico. Não edita arquivos.
-- **`criar-estudo`, Fase 8 opcional "Podcast"**, quando o usuário pede:
-  1. O próprio agente planeja (`prompts/podcast_planejador.md`) e valida via `python -m src.podcast.planner --validar`.
-  2. Para cada episódio, invoca `gerar-podcast` e depois `podcast-critico`, com no máximo 1 reescrita.
-  3. Grava o frontmatter com `gerado_por: claude-agent`.
-  4. O áudio fica com o Python ou o notebook (estágio 2 compartilhado).
-- O planejador **não** é sub-agente: precisa da visão do todo e é uma única chamada.
-- Ganho dos sub-agentes: contexto limpo, sem as transcrições e as até 60 iterações do agente principal. Os episódios podem rodar em paralelo, e o verificador é independente do autor.
-- Custo: handoff e mais chamadas.
+No caminho Claude, o LLM é o próprio Claude, e todo o resto é determinístico.
+
+**A ponte com o Python.** `python -m src.podcast.agente` é uma CLI **sem LLM**. Ela expõe as mesmas funções do caminho Python, de modo que os dois produzem os mesmos artefatos:
+
+| Subcomando | Faz |
+|---|---|
+| `status` | Estado da série: `ausente`, `valida` ou `desatualizada_ou_invalida`; lista os episódios sem roteiro (R1/R3/R4) |
+| `planejamento` | Escreve a entrada do planejador (`mensagem_planejamento`, a mesma do Python) em `podcast/.agente/` |
+| `serie` | Valida o plano. Sai com código 3 e a lista de erros para o agente corrigir, no máximo 2 vezes; com `--forcar`, `consertar` resolve o resto. Arquiva no `--replanejar` |
+| `entradas` | Grava `podcast/.agente/entradas_NN.md`, com as mesmas tags com id que o redator e o crítico recebem no Python (`montar_entradas`) |
+| `finalizar` | Lint, normaliza o JSON do crítico, grava o frontmatter D11 (`frontmatter()`, a mesma função do Python, com `gerado_por: claude-agent`) e uma linha no `relatorio.json` |
+
+**Os papéis.**
+- **`criar-estudo`, Fase 8 opcional**: é o próprio agente que planeja. O planejador não é sub-agente porque precisa da visão do todo e é uma única chamada. A Fase 8 orquestra os episódios em ordem crescente, com no máximo 1 reescrita guiada pelo crítico. Se a reescrita reprovar no lint, restaura o backup.
+- **`~/.claude/agents/gerar-podcast.md`** (redator): lê `prompts/podcast_redator.md` e o arquivo de entradas, grava o roteiro e roda `python -m src.podcast.lint`, corrigindo uma vez se reprovar.
+- **`~/.claude/agents/podcast-critico.md`** (verificador independente): lê `prompts/podcast_critico.md`, as entradas e o roteiro, e grava o JSON. Não emite veredito global; quem calcula é o `finalizar`.
+
+**Ganho dos sub-agentes:**
+- contexto limpo (sem as transcrições e o histórico do agente principal);
+- verificador separado do autor.
+
+**Custo:** handoff entre agentes e mais chamadas.
+
+**Limitação:** os episódios rodam em sequência, porque as entradas do episódio N resumem os roteiros já escritos dos anteriores.
 
 ## 5. Contexto de cada chamada do redator (e do crítico — mesmas entradas)
 
