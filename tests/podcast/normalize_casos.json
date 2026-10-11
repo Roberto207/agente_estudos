@@ -1,0 +1,54 @@
+[
+  {
+    "entrada": "Em 2024 o GPT-4 saiu",
+    "saida": "Em dois mil e vinte e quatro o GPT quatro saiu"
+  },
+  {
+    "entrada": "taxa de 0.001",
+    "saida": "taxa de zero vírgula zero zero um"
+  },
+  {
+    "entrada": "taxa de 0,01",
+    "saida": "taxa de zero vírgula zero um"
+  },
+  {
+    "entrada": "acurácia de 95%",
+    "saida": "acurácia de noventa e cinco por cento"
+  },
+  {
+    "entrada": "3,5% dos dados",
+    "saida": "três vírgula cinco por cento dos dados"
+  },
+  {
+    "entrada": "1.000 exemplos",
+    "saida": "mil exemplos"
+  },
+  {
+    "entrada": "1.234,5 metros",
+    "saida": "mil, duzentos e trinta e quatro vírgula cinco metros"
+  },
+  {
+    "entrada": "o 1º lugar e a 2ª vez",
+    "saida": "o primeiro lugar e a segunda vez"
+  },
+  {
+    "entrada": "camada 3.",
+    "saida": "camada três."
+  },
+  {
+    "entrada": "ResNet-50 tem 50 camadas",
+    "saida": "ResNet cinquenta tem cinquenta camadas"
+  },
+  {
+    "entrada": "pi vale 3.14",
+    "saida": "pi vale três vírgula um quatro"
+  },
+  {
+    "entrada": "sem números aqui",
+    "saida": "sem números aqui"
+  },
+  {
+    "entrada": "de 10 a 20 épocas",
+    "saida": "de dez a vinte épocas"
+  }
+]
