@@ -142,3 +142,15 @@ Na CLI: `--mode podcast-audio` e `--mode voice-test`, com `--engine` e `--saida`
   - player e zip de saída.
 - **Teste a seco local:** todas as células, menos o clone do repositório, rodaram com o motor `edge`. A extração do zip, o MP3, o manifesto e o zip de saída funcionaram. Esse teste achou um bug, já corrigido: sem `nvidia-smi`, a célula de ambiente quebrava.
 - **Não testado:** XTTS, Chatterbox e Qwen3 com GPU de verdade, porque esta máquina não tem GPU. Os nomes de voz padrão do XTTS no notebook ("Damien Black" e "Ana Florence") vêm de memória e devem ser confirmados com a célula de listar vozes.
+
+### 1ª execução real no Kaggle (2026-10-11, XTTS, GPU T4 x2, Python 3.13)
+
+Falhou com "XTTS não instalado". O `pip install coqui-tts` tinha funcionado, então o problema era a importação, e a mensagem do adaptador escondia a causa. A causa provável, sem confirmação porque a mensagem a escondeu, é o transformers 5.x, que quebra o import do XTTS ([idiap/coqui-ai-TTS#558](https://github.com/idiap/coqui-ai-TTS/issues/558)). A célula opcional de listar vozes derrubou o "Save & Run All". O Output da versão saiu só com o repositório clonado.
+
+Correções:
+- **Adaptadores** passam a mostrar o `ImportError` original.
+- **Notebook:**
+  - instala `coqui-tts[codec]` com `transformers>=4.43,<5`;
+  - testa o import num processo novo logo depois da instalação e para ali mesmo com o erro real;
+  - a célula de vozes passa a ser tolerante a falha;
+  - o repositório e o cache vão para `/kaggle/temp`, então o Output fica só com os MP3 e os zips.

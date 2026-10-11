@@ -32,7 +32,8 @@ class ChatterboxEngine:
                 import torch
                 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
             except ImportError as exc:
-                raise ErroTTS("Chatterbox não instalado: pip install chatterbox-tts") from exc
+                raise ErroTTS(f"Chatterbox não pôde ser importado ({type(exc).__name__}: {exc}). "
+                              "Instale com: pip install chatterbox-tts") from exc
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self._modelo_obj = ChatterboxMultilingualTTS.from_pretrained(device=device)
         return self._modelo_obj

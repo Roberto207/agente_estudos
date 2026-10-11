@@ -30,8 +30,9 @@ class XttsEngine:
             try:
                 import torch
                 from TTS.api import TTS
-            except ImportError as exc:
-                raise ErroTTS("XTTS não instalado: pip install coqui-tts (e torch)") from exc
+            except ImportError as exc:  # mostra a causa: "não instalado" escondia incompatibilidade de versão
+                raise ErroTTS(f"XTTS não pôde ser importado ({type(exc).__name__}: {exc}). "
+                              "Instale com: pip install 'coqui-tts[codec]' 'transformers>=4.43,<5'") from exc
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self._tts = TTS(MODELO).to(device)
         return self._tts

@@ -27,7 +27,7 @@ class EdgeEngine:
         try:
             import edge_tts
         except ImportError as exc:
-            raise ErroTTS("edge-tts não instalado: pip install edge-tts") from exc
+            raise ErroTTS(f"edge-tts não pôde ser importado ({exc}). Instale com: pip install edge-tts") from exc
         if not voz:
             raise ErroTTS("edge: voz não configurada para o papel (voz.engines.edge.<papel>).")
         ultimo: Exception | None = None

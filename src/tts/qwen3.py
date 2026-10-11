@@ -35,7 +35,8 @@ class Qwen3Engine:
                 import torch
                 from qwen_tts import Qwen3TTSModel
             except ImportError as exc:
-                raise ErroTTS("Qwen3-TTS não instalado: pip install -U qwen-tts") from exc
+                raise ErroTTS(f"Qwen3-TTS não pôde ser importado ({type(exc).__name__}: {exc}). "
+                              "Instale com: pip install -U qwen-tts soundfile") from exc
             if not torch.cuda.is_available():
                 raise ErroTTS("Qwen3-TTS precisa de GPU (cuda).")
             dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
