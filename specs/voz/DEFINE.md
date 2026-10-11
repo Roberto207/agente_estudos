@@ -64,6 +64,7 @@ teste de vozes e clonagem opcional (estágio 2), CLI, notebooks Kaggle/Colab e a
 - R15. O lint DEVE reprovar o roteiro SE: (a) o episódio 1 contiver "episódio anterior/passado" ou "último episódio"; (b) uma fala do episódio N mencionar (D8) episódio de número ≥ N junto de marcador de passado ("vimos", "viu", "falamos", "aprendemos", "lembra"…); (c) houver menção a episódio de número maior que o total; (d) o último episódio contiver "próximo episódio".
 - R16. ONDE a série tiver mais de um episódio, o lint DEVE emitir aviso para todo episódio N > 1 sem nenhuma menção (D8) a episódio de número < N.
 - R17. SE uma fala contiver elogio do tipo `<ótima|ótimo|excelente|boa|bom|bela|belo|grande|que> <pergunta|dúvida|observação|questão|ponto>` (sem diferenciar maiúsculas) ENTÃO o lint DEVE reprovar o roteiro.
+- R17b. SE uma fala se referir à origem do roteiro ("o material", "apostila", "nome usado", "transcrição", "do curso") ENTÃO o lint DEVE reprovar o roteiro.
 - R18. O lint DEVE emitir aviso quando nenhuma fala do Aprendiz contiver "por que"/"por quê" ou quando nenhuma contiver "e se".
 - R19. ONDE o estágio 2 for executado, o sistema DEVE converter, antes da síntese, numerais, `%`, decimais com vírgula e ponto, ordinais e anos para extenso em pt-BR, de forma que a mesma entrada produza sempre a mesma saída (tabela de casos em `tests/podcast/normalize_casos.json`).
 

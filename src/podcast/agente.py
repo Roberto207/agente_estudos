@@ -9,6 +9,7 @@ produzirem os mesmos artefatos. Nenhum subcomando chama LLM.
     python -m src.podcast.agente planejamento <pasta>
     python -m src.podcast.agente serie        <pasta> <plano.json> [--replanejar] [--forcar]
     python -m src.podcast.agente entradas     <pasta> <n>
+    python -m src.podcast.agente backup       <pasta> <n>          (antes de reescrever)
     python -m src.podcast.agente finalizar    <pasta> <n> --modelo M --reescritas K
                                               [--critica <critica.json> | --critica-indisponivel]
 
@@ -18,6 +19,7 @@ erros a corrigir (subcomando `serie` sem --forcar).
 from __future__ import annotations
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -134,6 +136,20 @@ def entradas(pasta: Path, n: int) -> dict:
             "critica_saida_sugerida": str(_dir_agente(pasta) / f"critica_{n:02d}.json")}
 
 
+def backup(pasta: Path, n: int) -> dict:
+    """Guarda o roteiro e a crítica atuais antes da reescrita guiada pelo crítico.
+    Chamado pelo sub-agente gerar-podcast, não pelo orquestrador (cada chamada do
+    orquestrador relê um contexto grande)."""
+    s = _serie(pasta)
+    _episodio(s, n)
+    d = _dir_agente(pasta)
+    shutil.copyfile(_roteiros(pasta, s)[n], d / f"backup_{n:02d}.md")
+    critica = d / f"critica_{n:02d}.json"
+    if critica.exists():
+        shutil.copyfile(critica, d / f"critica_{n:02d}.anterior.json")
+    return {"backup": str(d / f"backup_{n:02d}.md")}
+
+
 def finalizar(pasta: Path, n: int, modelo: str, reescritas: int,
               critica_json: Path | None, critica_indisponivel: bool) -> dict:
     s = _serie(pasta)
@@ -142,6 +158,19 @@ def finalizar(pasta: Path, n: int, modelo: str, reescritas: int,
     _, texto = separar_frontmatter(caminho.read_text(encoding="utf-8"))
     curto = material.material_curto(pasta, ep["arquivos"])
     res = lint(texto, n, len(s["episodios"]), curto)
+
+    # A reescrita guiada pelo crítico quebrou o formato: volta a versão anterior (que
+    # passava no lint) com a crítica anterior — não se troca conteúdo por formato pior.
+    restaurado = False
+    d = _dir_agente(pasta)
+    bkp, crit_ant = d / f"backup_{n:02d}.md", d / f"critica_{n:02d}.anterior.json"
+    if res.status == "reprovado" and bkp.exists():
+        _, texto_bkp = separar_frontmatter(bkp.read_text(encoding="utf-8"))
+        res_bkp = lint(texto_bkp, n, len(s["episodios"]), curto)
+        if res_bkp.status != "reprovado":
+            texto, res, restaurado = texto_bkp, res_bkp, True
+            if crit_ant.exists():
+                critica_json, critica_indisponivel = crit_ant, False
 
     resultado = None
     if res.status == "reprovado":
@@ -163,7 +192,7 @@ def finalizar(pasta: Path, n: int, modelo: str, reescritas: int,
     gravar_relatorio(pasta / "podcast", "anthropic", modelo, [{
         "episodio": n, "palavras": fm["palavras"], "lint": fm["lint"], "lint_codigos": fm["lint_codigos"],
         "critica": fm["critica"], "reescritas": reescritas, "segundos": None}], [])
-    return {"roteiro": str(caminho), "palavras": fm["palavras"], "duracao_estimada_s": fm["duracao_estimada_s"],
+    return {"roteiro": str(caminho), "restaurado_do_backup": restaurado, "palavras": fm["palavras"], "duracao_estimada_s": fm["duracao_estimada_s"],
             "lint": fm["lint"], "lint_codigos": fm["lint_codigos"], "critica": fm["critica"],
             "critica_problemas": fm["critica_problemas"], "pontes": fm["pontes"]}
 
@@ -179,6 +208,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("pasta"); p.add_argument("plano")
     p.add_argument("--replanejar", action="store_true"); p.add_argument("--forcar", action="store_true")
     p = sub.add_parser("entradas")
+    p.add_argument("pasta"); p.add_argument("n", type=int)
+    p = sub.add_parser("backup")
     p.add_argument("pasta"); p.add_argument("n", type=int)
     p = sub.add_parser("finalizar")
     p.add_argument("pasta"); p.add_argument("n", type=int)
@@ -198,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
             out, codigo = serie(pasta, Path(a.plano), a.replanejar, a.forcar)
         elif a.cmd == "entradas":
             out = entradas(pasta, a.n)
+        elif a.cmd == "backup":
+            out = backup(pasta, a.n)
         else:
             out = finalizar(pasta, a.n, a.modelo, a.reescritas,
                             Path(a.critica) if a.critica else None, a.critica_indisponivel)

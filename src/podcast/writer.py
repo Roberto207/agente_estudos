@@ -101,7 +101,8 @@ def situacao(ep: dict, serie: dict, pasta: Path, cfg: dict) -> dict:
         "ultimo": n == total,
         "material_curto": curto,
         "palavras_material": palavras,
-        "palavras_alvo": "o que o material sustentar" if curto else f"{faixa['min'] + 200} a {faixa['max'] - 200}",
+        "palavras_alvo": "o que o material sustentar" if curto
+        else f"{faixa['alvo_min']} a {faixa['alvo_max']} (nunca mais de 3000)",
         "introduz": ep.get("introduz", []),
         "menciona": ep.get("menciona", []),
         "proximo_tema": sanitizar_falavel(proximo["titulo"]) if proximo else "",

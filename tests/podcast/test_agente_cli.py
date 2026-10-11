@@ -86,6 +86,24 @@ def test_finalizar_lint_reprovado_e_critica_quebrada(tmp_path):
     assert agente.finalizar(pasta, 1, "m", 0, crit, False)["critica"] == "indisponivel"   # fail-open
 
 
+def test_backup_e_finalizar_restaura_quando_reescrita_quebra_o_lint(tmp_path):
+    pasta = _pasta(tmp_path)
+    agente.serie(pasta, _plano(tmp_path, PLANO), replanejar=False, forcar=False)
+    ent = agente.entradas(pasta, 1)
+    bom = "---\nepisodio: 1\n---\n" + roteiro_bom()
+    open(ent["roteiro"], "w", encoding="utf-8").write(bom)
+    crit = pasta / "podcast" / ".agente" / "critica_01.json"
+    crit.write_text(json.dumps(critica(fidelidade=[{"fala": "f", "motivo": "m", "evidencia": ""}])), encoding="utf-8")
+
+    agente.backup(pasta, 1)
+    # reescrita quebrou o formato; a nova crítica nem rodou
+    open(ent["roteiro"], "w", encoding="utf-8").write("---\nepisodio: 1\n---\n" + roteiro_bom("[Professor]: x = 1"))
+    fim = agente.finalizar(pasta, 1, "m", 1, crit, False)
+    assert fim["restaurado_do_backup"] is True
+    assert (fim["lint"], fim["critica"]) == ("aprovado", "reprovado")   # versão e crítica anteriores
+    assert "x = 1" not in open(ent["roteiro"], encoding="utf-8").read()
+
+
 def test_cli_codigos_de_saida(tmp_path, capsys):
     vazia = criar_pasta(tmp_path / "v", {"transcripts/t.md": "x"})
     assert agente.main(["status", str(vazia)]) == 1

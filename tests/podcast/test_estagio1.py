@@ -140,7 +140,7 @@ def test_caminho_feliz_frontmatter_d11(tmp_path):
     assert D11 <= set(r.frontmatter)
     assert r.frontmatter["lint"] == "aprovado" and r.frontmatter["critica"] == "aprovado"
     assert r.frontmatter["reescritas"] == 0
-    assert r.frontmatter["prompts"]["redator"].startswith("v3+")
+    assert r.frontmatter["prompts"]["redator"].startswith("v4+")
     assert r.frontmatter["modelo"] == "fake-1"
     assert llm.papeis() == ["planejador", "redator", "critico"]
     assert [t for p, t, _ in llm.chamadas if p == "redator"] == [0.8]
@@ -272,7 +272,7 @@ def test_descricao_do_arquivo_para_o_planejador_ignora_frontmatter(tmp_path):
 def test_situacao_separa_centrais_e_apoio(tmp_path):
     pasta = criar_pasta(tmp_path, {"a.md": MATERIAL.format(t="A")})
     ep = {"numero": 1, "titulo": "A", "arquivos": ["a.md"], "introduz": ["x"], "menciona": ["y", "z"]}
-    sit = writer.situacao(ep, {"episodios": [ep]}, pasta, {"palavras": {"min": 2000, "max": 3200}})
+    sit = writer.situacao(ep, {"episodios": [ep]}, pasta, {"palavras": {"min": 2000, "max": 3200, "alvo_min": 2200, "alvo_max": 2700}})
     texto = writer._situacao_texto(sit)
     assert "conceitos centrais (introduz): x" in texto and "conceitos de apoio (menciona): y; z" in texto
 

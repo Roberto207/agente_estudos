@@ -52,6 +52,14 @@ _PASSADO = re.compile(
 _EP_ANTERIOR = re.compile(r"\bepis[oó]dio (anterior|passado)\b|\b[uú]ltimo epis[oó]dio\b", re.IGNORECASE)
 _PROXIMO_EP = re.compile(r"\bpr[oó]ximo epis[oó]dio\b", re.IGNORECASE)
 
+# R17b — bastidor: o ouvinte não sabe que existe "o material" de onde o roteiro saiu. No teste
+# real, um episódio tinha 17 falas assim ("o nome usado no material", "o material coloca…").
+_BASTIDOR = re.compile(
+    r"\b(?:o|do|no|pelo|nesse|neste|desse|deste|esse|este|nosso|seu)\s+material\b"
+    r"|\bapostila\b|\bnome usado\b|\btranscri[çc][ãa]o\b|\bdo curso\b",
+    re.IGNORECASE,
+)
+
 _POR_QUE = re.compile(r"\bpor qu[eê]\b", re.IGNORECASE)
 _E_SE = re.compile(r"\be se\b", re.IGNORECASE)
 _CONCORDA = re.compile(r"\b(entendi|faz sentido|certo|legal|ok|beleza|show|claro|saquei)\b", re.IGNORECASE)
@@ -120,6 +128,9 @@ def lint(texto: str, numero: int, total: int, material_curto: bool = False) -> R
         # L5 — R17.
         if _BORDOES.search(f.texto):
             add(Achado("L5", f"elogio vazio: {_BORDOES.search(f.texto).group(0)!r}", f.linha))
+        # L9 — R17b.
+        if m := _BASTIDOR.search(f.texto):
+            add(Achado("L9", f"fala de bastidor ({m.group(0)!r}): o ouvinte não conhece o material", f.linha))
         # L4 — R15.
         for m in _MENCAO_EP.finditer(f.texto):
             k = _numero_mencionado(m.group(1))

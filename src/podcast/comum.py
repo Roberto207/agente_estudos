@@ -11,7 +11,9 @@ from .script_io import separar_frontmatter
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
 DEFAULTS = {
-    "palavras": {"min": 2000, "max": 3200},
+    # min/max: limites do lint (R13). alvo: o que o redator mira — abaixo do teto de 3.000
+    # do prompt, porque mirar 3.000 fez 4 de 9 episódios estourarem 3.200 e serem refeitos.
+    "palavras": {"min": 2000, "max": 3200, "alvo_min": 2200, "alvo_max": 2700},
     "max_chars_material": 24000,
     "rag_raiz": "",
     "rag_k": 5,

@@ -82,6 +82,17 @@ def test_l5_elogio_vazio_vale_para_os_dois_papeis():
     assert "L5" not in _codigos(_roteiro("[Professor]: A grande questão é o custo."))
 
 
+def test_l9_bastidor():
+    for fala in ["[Professor]: A CNCF, sigla que é o nome usado no material, define plataforma.",
+                 "[Professor]: O material coloca o CALMS como diagnóstico.",
+                 "[Professor]: Na apostila isso aparece depois.",
+                 "[Professor]: O Savill, autor de um dos vídeos do curso, diz isso."]:
+        assert "L9" in _codigos(_roteiro(fala)), fala
+    # citar autores do assunto é permitido; "material" fora desse uso também
+    assert "L9" not in _codigos(_roteiro("[Professor]: O Gene Kim propôs os Três Caminhos."))
+    assert "L9" not in _codigos(_roteiro("[Professor]: O servidor guarda material sensível."))
+
+
 def test_l7_aprendiz_sem_por_que_e_sem_e_se():
     corpo = "## A\n" + "\n".join([_P, "[Aprendiz]: Entendo, continue explicando com calma por favor."] * 45)
     res = lint(corpo, 2, 3, material_curto=True)  # curto: isola o L7 do L3 (tamanho)

@@ -40,3 +40,29 @@ Cópia de `~/obsidian/machine_learning/alura_modelos_tradicionais_classificacao`
 - **Pontes no frontmatter (D11):** extraídas do texto por código: menções D8 a episódios anteriores e falas que citam o título de um arquivo que não é fonte do episódio.
 - **Busca RAG (R25/R26):** usa `_load_index` + `search` direto do `indexer`, porque `search_vault` chama `build_or_update_index` e reindexaria a pasta.
 - **DEFINE v1.1** (D7, R15, R17) — ver Histórico no `DEFINE.md`.
+
+## Redução de custo (2026-10-11)
+
+Medição da série `devops/01_fundamentos_devops` (9 episódios, tudo em Opus 5.5): ~8,8 M tokens lidos de cache, ~1,0 M escritos em cache, ≥ ~100 mil de output. Custo a preço de tabela: ≥ ~$8,70, cerca de $1 por episódio. O cache escrito pelos sub-agentes responde por 58%.
+
+Mudanças sem impacto na qualidade:
+- **Meta de palavras 2.200–2.700, teto 3.000 no prompt.** Na série medida, 4 de 9 primeiras versões estouraram 3.200 e foram refeitas.
+- **Lint L9 (R17b) e redator v4, regra 8 "sem bastidor".** O prompt v3 induzia frases como "é o nome usado no material"; a série tinha 75 falas assim, e o crítico oscilava entre aprovar e reprovar.
+- **Reescrita pontual com Edit** (lint e crítico), em vez de regravar o roteiro inteiro.
+- **Menos chamadas do orquestrador:** o backup passou para o sub-agente (`agente backup`); o `finalizar` restaura sozinho quando a reescrita quebra o lint; `finalizar N` e `entradas N+1` rodam numa só chamada Bash.
+
+### Teste: crítico em Sonnet 5.5 contra o gabarito do Opus
+
+O teste usou 4 roteiros com problema real achado pelo Opus (versões antes da reescrita) e 2 episódios aprovados de primeira. O prompt do crítico foi o mesmo, v3, e o esforço ficou no padrão do Sonnet.
+
+| Ep | Problema real (achado pelo Opus) | Sonnet 5.5 |
+|---|---|---|
+| 3 | "Cada sexta era uma aposta nova" — no material o deploy era trimestral | ❌ aprovou |
+| 6 | Atribui à cardinalidade o que o material atribui à agregação das métricas | ❌ aprovou |
+| 7 | "A definição mais citada" (de Fowler), sem fonte | ❌ aprovou |
+| 8 | "Nome usado no material" (bastidor) | ✅ pegou |
+| 2, 5 | Limpos | ✅ sem falso positivo |
+
+Custo de entrada por execução: Sonnet ~$0,084 contra Opus ~$0,156 (1,9× mais barato, com o mesmo volume de tokens). Em 9 episódios, isso economizaria ~$0,9 (~11% da série) e deixaria passar 3 de 4 erros de fidelidade.
+
+**Decisão:** o crítico continua em Opus. O erro do ep. 8 agora é barrado pelo lint L9, sem LLM.
