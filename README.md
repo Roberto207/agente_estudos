@@ -226,9 +226,13 @@ Dentro do chat, os comandos disponíveis são:
 
 **`--mode agent`** (padrão): loop agêntico real. O LLM recebe ferramentas e decide sozinho o que chamar, em que ordem, podendo se adaptar ao conteúdo encontrado.
 
+**`--artigo`** (só com `--mode agent`): modo para material de estudo sobre **um artigo/paper**. Em vez da pasta temática com TL;DR/Resumo/Conteúdo, gera a **leitura linear** do artigo em 1 ou 2 partes (`NN_leitura_<artigo>_parte1.md`, `_parte2.md`), na ordem do artigo, autossuficiente (termos definidos na primeira aparição, Pausas de base, processo contado inteiro, fechamento com verificações). Sem guia, canvas, flashcards nem quiz. O `fetch_url` lê PDFs por inteiro (precisa de `pdftotext`/poppler ou `pypdf`). Regras em `prompts/modo_artigo.md` (fonte única, a mesma do agente Claude `criar-estudo`). Exemplo: `python main.py --mode agent --artigo --tema "Adam" --pasta ~/estudos/adam --fonte https://arxiv.org/pdf/1412.6980`. Não está ligado ao `--mode pipeline` nem à interface web.
+
 **`--mode pipeline`**: sequência fixa de 8 fases (legado). Útil quando o modelo não suporta tool_use (ex: alguns modelos Ollama).
 
-**`--mode postprocess`**: regenera flashcards, quiz, próximos passos e canvas sobre uma pasta já existente, sem tema nem fontes.
+**`--mode flashcards-propor` / `--mode flashcards-montar`**: lista de flashcards para aprovação e HTML só com os aprovados (ver "Flashcards com Spaced Repetition"). No `--artigo`, o fim da execução oferece o comando de propor.
+
+**`--mode postprocess`**: regenera a lista de flashcards propostos, quiz, próximos passos e canvas sobre uma pasta já existente, sem tema nem fontes.
 
 **`--mode podcast`** (em construção — spec em `specs/voz/`): sobre uma pasta já gerada, planeja uma série de episódios (`podcast/serie.json`) e escreve roteiros em diálogo Professor/Aprendiz (`podcast/episodio_NN_<tema>.md`), passando cada um por um lint determinístico e por um crítico LLM. `--episodios 2,5` regera episódios específicos; `--replanejar` arquiva a série atual e planeja de novo. A síntese de áudio (estágio 2) ainda não está implementada.
 
@@ -425,7 +429,8 @@ agente-estudos/
     └── generators/
         ├── content.py         # Arquivos .md com 3 níveis de profundidade
         ├── canvas.py          # Canvas Obsidian
-        ├── flashcards.py      # Flashcards SM-2 (gerado automaticamente)
+        ├── flashcards.py      # Flashcards SM-2: propor (lista .md) e montar (HTML)
+        ├── flashcards_lista.py # Formato da lista, parser, lint e merge (sem LLM)
         ├── quiz.py            # Quiz MCQ (gerado automaticamente)
         └── next_steps.py      # Recomendações pós-estudo (gerado automaticamente)
 ```
@@ -480,8 +485,14 @@ Cada `.md` gerado contém obrigatoriamente três seções:
 
 ### Flashcards com Spaced Repetition
 
-Gerado automaticamente em `html/flashcards.html` após cada execução. Funciona offline, sem dependências externas.
+Em dois passos, com a sua revisão no meio, para só entrar o que importa (fluxo principal e conceitos centrais; fórmulas só em texto simples, cada símbolo com um subcard):
 
+1. `python main.py --mode flashcards-propor --pasta <pasta>` grava `flashcards_propostos.md` (30 a 50 cards, todos `[ ]`). Regras em `prompts/flashcards_regras.md` (fonte única, a mesma do agente `criar-estudo`); um lint barra LaTeX, símbolo sem subcard, "o que diz o arquivo X", pergunta de sim ou não e duplicata. No Obsidian: marque `[x]` para aprovar, apague o bloco para descartar, copie um bloco para criar um card.
+2. `python main.py --mode flashcards-montar --pasta <pasta>` gera `html/flashcards.html` só com os aprovados (`--aprovar-todos` monta com todos). Não precisa de chave de API.
+
+`--regerar` no passo 1 acrescenta cards novos sem apagar a sua revisão e sem repropor o que você descartou. O agente Claude escreve a lista sozinho (sem chave) e valida com `python -m src.generators.flashcards_lista <pasta>`. O HTML funciona offline, sem dependências externas.
+
+- **Subcards (botões laterais):** abaixo da resposta de cada card, a seção `**Termos:**` lista um subcard por símbolo de equação e por termo técnico (`- [ ] \`θ_t\`: explicação`). Marque `[x]` nos que devem entrar. No HTML, o card fica no meio e os termos marcados viram botões nas duas laterais (a face da pergunta mostra os termos que aparecem nela, a da resposta os dela); clicar abre um painel flutuante com a explicação, que fecha com `Esc`, clique fora ou ao virar o card. Em tela estreita os botões descem para baixo do card. Card sem `**Termos:**` continua válido, sem botões.
 - Algoritmo **SM-2** implementado em JavaScript puro
 - Card flip com animação 3D (CSS)
 - Botões Difícil / Médio / Bom / Fácil ajustam o intervalo de revisão

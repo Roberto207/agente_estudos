@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Callable
 
 from rich.console import Console
+from rich.markup import escape
 
 from .generators.canvas import write_canvas_files
-from .generators.flashcards import generate as gen_flashcards
+from .generators.flashcards import propor as propor_flashcards
 from .generators.next_steps import generate as gen_next_steps
 from .generators.quiz import generate as gen_quiz
 
@@ -88,14 +89,20 @@ def run_postprocessing(
 
     if outputs.get("flashcards", True):
         try:
-            with console.status("[yellow]Gerando flashcards (SM-2)...[/yellow]"):
-                fc_path = gen_flashcards(llm, pasta)
-            result["flashcards"] = fc_path
-            if fc_path:
-                console.print(f"  [green]✓[/green] Flashcards: {fc_path}")
+            with console.status("[yellow]Propondo flashcards (lista para aprovação)...[/yellow]"):
+                rel = propor_flashcards(llm, pasta, regerar=bool(outputs.get("regerar_flashcards")))
+            lista_path = str(Path(pasta) / "flashcards_propostos.md") if rel else None
+            result["flashcards"] = lista_path
+            if rel:
+                console.print(f"  [green]✓[/green] Flashcards propostos: {escape(lista_path)}\n{escape(rel.resumo())}")
+                console.print("  Revise a lista (marque \\[x]) e rode: python main.py --mode flashcards-montar --pasta ...")
             else:
                 console.print("  [dim]Flashcards: sem conteúdo suficiente[/dim]")
-            emit("postprocessing_step", {"name": "flashcards", "status": "ok", "path": fc_path})
+            emit("postprocessing_step", {"name": "flashcards", "status": "ok", "path": lista_path})
+        except FileExistsError as exc:
+            result["flashcards"] = None
+            console.print(f"  [dim]Flashcards: {exc}[/dim]")
+            emit("postprocessing_step", {"name": "flashcards", "status": "error", "error": str(exc)})
         except Exception as exc:
             result["flashcards"] = None
             console.print(f"  [dim]Flashcards: falhou ({exc})[/dim]")

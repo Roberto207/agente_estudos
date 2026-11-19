@@ -20,6 +20,8 @@ from .tools.registry import get_tools_for_provider, execute_tools_batch
 from .postprocessing import run_postprocessing
 
 MAX_ITERATIONS = 60
+# uma parte da leitura linear tem 4 a 6 mil palavras e é escrita numa só chamada de write_file
+_MAX_TOKENS_ARTIGO = 16384
 
 console = Console()
 
@@ -116,15 +118,26 @@ def run(
     fontes: list[str],
     on_event: Callable[[str, dict], None] | None = None,
     outputs: dict | None = None,
+    modo_artigo: bool = False,
 ) -> None:
     """`on_event(event_type, payload)` e `outputs` (toggles de canvas/
     flashcards/quiz/next_steps) são opcionais e aditivos — chamadas existentes
     sem esses parâmetros mantêm o comportamento de hoje inalterado.
+
+    `modo_artigo=True` troca o prompt e a estrutura da pasta pelo "Modo artigo"
+    (prompts/modo_artigo.md): leitura linear do artigo em 1 ou 2 partes, sem
+    guia, canvas, flashcards nem quiz (a menos que `outputs` os ligue).
     """
     emit = on_event or (lambda *a, **k: None)
     llm = LLMClient(config)
     provider = config.get("provider", "anthropic")
-    system = _SYSTEM
+    if modo_artigo:
+        from .modo_artigo import system_modo_artigo
+        from .postprocessing import OUTPUT_KEYS
+        system = system_modo_artigo()
+        outputs = {**{k: False for k in OUTPUT_KEYS}, **(outputs or {})}
+    else:
+        system = _SYSTEM
 
     console.print(Panel(
         f"[bold purple]Agente Estudos[/bold purple] [dim](modo agentico)[/dim]\n"
@@ -138,7 +151,7 @@ def run(
     ))
 
     tools = get_tools_for_provider(provider, names=_CREATION_TOOLS)
-    user_message = _build_task(tema, foco, didatica, pasta, fontes)
+    user_message = _build_task(tema, foco, didatica, pasta, fontes, modo_artigo=modo_artigo)
     messages: list[dict] = [{"role": "user", "content": user_message}]
 
     iteration = 0
@@ -158,6 +171,7 @@ def run(
                     messages=messages,
                     tools=tools,
                     system=system,
+                    **({"max_tokens": _MAX_TOKENS_ARTIGO} if modo_artigo else {}),
                 )
 
             if resp.stop_reason == "end_turn" or not resp.tool_calls:
@@ -215,16 +229,23 @@ def run(
         f"\n[dim]Total de chamadas de ferramentas: {total_tool_calls} em {iteration} iterações[/dim]"
     )
 
-    post = run_postprocessing(llm, pasta, tema=tema, foco=foco, on_event=on_event, outputs=outputs)
+    if modo_artigo and not any((outputs or {}).values()):
+        post: dict = {}
+        console.print(
+            "\n[dim]Quer flashcards deste artigo? Gere a lista para aprovar com:[/dim]\n"
+            f"  python main.py --mode flashcards-propor --pasta \"{pasta}\""
+        )
+    else:
+        post = run_postprocessing(llm, pasta, tema=tema, foco=foco, on_event=on_event, outputs=outputs)
 
-    for key, label in (("flashcards", "Flashcards"), ("quiz", "Quiz")):
+    for key, label in (("flashcards", "Flashcards propostos (revise e rode flashcards-montar)"), ("quiz", "Quiz")):
         if post.get(key):
             console.print(f"[bold]{label}:[/bold] [cyan]file://{os.path.abspath(post[key])}[/cyan]")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _build_task(tema: str, foco: str, didatica: str, pasta: str, fontes: list[str]) -> str:
+def _build_task(tema: str, foco: str, didatica: str, pasta: str, fontes: list[str], modo_artigo: bool = False) -> str:
     lines = [
         f"Tema: {tema}",
         f"Foco: {foco or tema}",
@@ -238,10 +259,16 @@ def _build_task(tema: str, foco: str, didatica: str, pasta: str, fontes: list[st
     else:
         lines.append("Fontes: nenhuma fornecida — use apenas pesquisa web sobre o tema e foco.")
 
-    lines.append(
-        "\nCrie a estrutura completa de estudo conforme as instruções do sistema. "
-        "Comece criando as pastas, depois processe as fontes, depois escreva o conteúdo."
-    )
+    if modo_artigo:
+        lines.append(
+            "\nMODO ARTIGO: a fonte principal é um artigo. Crie a leitura linear (1 ou 2 partes) "
+            "conforme as regras do modo artigo. Leia o texto completo do paper antes de escrever."
+        )
+    else:
+        lines.append(
+            "\nCrie a estrutura completa de estudo conforme as instruções do sistema. "
+            "Comece criando as pastas, depois processe as fontes, depois escreva o conteúdo."
+        )
     return "\n".join(lines)
 
 

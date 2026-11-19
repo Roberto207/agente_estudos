@@ -18,6 +18,7 @@ from pathlib import Path
 import typer
 import yaml
 from rich.console import Console
+from rich.markup import escape
 from rich.prompt import Prompt, Confirm
 
 
@@ -58,7 +59,7 @@ app = typer.Typer(
 console = Console()
 
 # Modos que trabalham sobre uma pasta já gerada — não pedem tema.
-_MODOS_SEM_TEMA = ("postprocess", "podcast")
+_MODOS_SEM_TEMA = ("postprocess", "podcast", "flashcards-propor", "flashcards-montar")
 
 _CONFIG_PATHS = [
     Path("config.yaml"),
@@ -75,12 +76,15 @@ def main(
     fontes: list[str] = typer.Option([], "--fonte", "-s", help="URL ou caminho de fonte (repita para múltiplas)"),
     config_path: str = typer.Option("", "--config", help="Caminho para config.yaml"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Modo interativo (ignora outros argumentos)"),
-    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas sobre pasta existente) | podcast (roteiros de podcast sobre pasta existente) | podcast-audio (MP3 dos roteiros) | voice-test (mesmo trecho em cada motor de voz)"),
+    mode: str = typer.Option("agent", "--mode", "-m", help="Modo de execução: agent (agentico) | pipeline (legado) | postprocess (só regenerar flashcards/quiz/canvas sobre pasta existente) | podcast (roteiros de podcast sobre pasta existente) | podcast-audio (MP3 dos roteiros) | voice-test (mesmo trecho em cada motor de voz) | flashcards-propor (lista flashcards_propostos.md para você aprovar) | flashcards-montar (html/flashcards.html só com os aprovados)"),
     apenas: list[str] = typer.Option([], "--apenas", "-a", help="Restringe outputs no modo postprocess: flashcards, quiz, next_steps, canvas (repita: --apenas quiz --apenas flashcards). Vazio = todos."),
     replanejar: bool = typer.Option(False, "--replanejar", help="Modo podcast: arquiva serie.json e roteiros atuais em podcast/arquivo/ e planeja a série de novo"),
     episodios: str = typer.Option("", "--episodios", help="Modos podcast/podcast-audio: só estes episódios (ex.: 2,5)"),
     engine: list[str] = typer.Option([], "--engine", help="Modos podcast-audio/voice-test: motor de voz (edge | xtts | chatterbox | qwen3); no voice-test, repita para testar vários"),
     saida: str = typer.Option("teste_vozes", "--saida", help="Modo voice-test: pasta onde gravar um MP3 por motor"),
+    artigo: bool = typer.Option(False, "--artigo", help="Modo artigo (só --mode agent): a fonte principal é UM artigo/paper; gera a leitura linear em 1 ou 2 partes (prompts/modo_artigo.md), sem guia/canvas/flashcards/quiz"),
+    regerar: bool = typer.Option(False, "--regerar", help="Modo flashcards-propor: acrescenta cards novos a uma lista existente, sem apagar a sua revisão"),
+    aprovar_todos: bool = typer.Option(False, "--aprovar-todos", help="Modo flashcards-montar: monta o HTML com todos os cards da lista, aprovados ou não"),
     chat: bool = typer.Option(False, "--chat", "-c", help="Abre chat interativo sobre a pasta de estudos"),
     chat_mode: str = typer.Option("qa", "--chat-mode", help="Modo do chat: qa (NotebookLM) | socratico"),
 ):
@@ -96,6 +100,20 @@ def main(
             sys.exit(1)
         from src.chat import run as chat_run
         chat_run(config=config, pasta=pasta, mode=chat_mode)
+        return
+
+    # ── Flashcards: montar não usa LLM (não exige chave) ──────────────────────
+    if mode == "flashcards-montar":
+        if not pasta:
+            console.print("[red]✗[/red] --pasta é obrigatório no modo flashcards-montar")
+            raise typer.Exit(1)
+        from src.generators.flashcards import montar
+        try:
+            caminho = montar(str(Path(pasta).expanduser().resolve()), aprovar_todos=aprovar_todos)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[red]✗[/red] {escape(str(exc))}")
+            raise typer.Exit(1)
+        console.print(f"[green]✓[/green] Flashcards: {escape(caminho)}")
         return
 
     # ── Modos de áudio (sem LLM: não exigem tema nem chave de API) ────────────
@@ -144,6 +162,24 @@ def main(
             raise typer.Exit(1)
         return
 
+    if mode == "flashcards-propor":
+        from src.llm import LLMClient
+        from src.generators.flashcards import propor
+        try:
+            rel = propor(LLMClient(config), pasta, regerar=regerar)
+        except FileExistsError as exc:
+            console.print(f"[red]✗[/red] {escape(str(exc))}")
+            raise typer.Exit(1)
+        except Exception as exc:
+            console.print(f"[red]✗[/red] Não consegui propor os flashcards: {escape(str(exc))}")
+            raise typer.Exit(1)
+        if rel is None:
+            console.print("[dim]Flashcards: sem conteúdo suficiente na pasta[/dim]")
+            return
+        console.print(f"[green]✓[/green] {escape(str(Path(pasta) / 'flashcards_propostos.md'))}\n{escape(rel.resumo())}")
+        console.print("Revise no Obsidian (marque \\[x]) e rode: --mode flashcards-montar --pasta ...")
+        return
+
     if mode == "postprocess":
         from src.llm import LLMClient
         from src.postprocessing import run_postprocessing, OUTPUT_KEYS
@@ -156,11 +192,16 @@ def main(
         run_postprocessing(llm, pasta, tema=tema, foco=foco, outputs=outputs)
         return
 
+    if artigo and mode != "agent":
+        console.print("[red]--artigo só funciona com --mode agent[/red] (precisa de tool_use para ler o paper completo).")
+        raise typer.Exit(1)
+
     if mode == "pipeline":
         from src.pipeline import run
     else:
         from src.agent import run
 
+    extra = {"modo_artigo": True} if artigo else {}
     run(
         config=config,
         tema=tema,
@@ -168,6 +209,7 @@ def main(
         didatica=didatica,
         pasta=pasta,
         fontes=list(fontes),
+        **extra,
     )
 
 

@@ -21,9 +21,9 @@ Existem dois caminhos que produzem a mesma estrutura de pasta.
 | 2. Extração | Transcreve vídeos e lê artigos, papers e repositórios GitHub para `transcripts/` |
 | 3. Planejamento | Decide subpastas e arquivos, ordenados pela cadeia de dependências |
 | 4. Pesquisa | Faz buscas complementares na web |
-| 5. Escrita | Escreve os `.md` com TL;DR, Resumo e Conteúdo Completo. Antes de escrever, lê as 13 regras de `prompts/regras_didaticas.md` (intuição antes da fórmula, exemplo-fio-condutor, citações, mermaid…) |
+| 5. Escrita | Escreve os `.md` com TL;DR, Resumo e Conteúdo Completo. Antes de escrever, lê as regras de `prompts/regras_didaticas.md` (intuição antes da fórmula, exemplo-fio-condutor, citações, mermaid, processo contado inteiro, fontes do ganho…) |
 | 6. Guia | Escreve o `guia_de_estudos.md` com a ordem de leitura |
-| 7. Revisão | Chama o Python para gerar `html/flashcards.html` e `html/quiz.html` |
+| 7. Revisão | Escreve `flashcards_propostos.md` (regras em `prompts/flashcards_regras.md`), para e pede a sua aprovação; depois chama o Python para montar `html/flashcards.html` e gera `html/quiz.html` |
 | 8. Podcast | Opcional, só quando o usuário pede (seção 2) |
 
 ### Projeto Python
@@ -39,7 +39,7 @@ Usado por `main.py`, pela interface web e pelo notebook do Kaggle/Colab. Faz o m
 O hub `html/index.html`, as páginas HTML por conceito e o mapa mental foram removidos por desuso. O material é lido no Obsidian. Os únicos HTMLs gerados são:
 
 - `html/quiz.html`: questões e alternativas embaralhadas a cada sessão, grade numerada, campo "ir para questão N";
-- `html/flashcards.html`: fila embaralhada, modo "pendentes hoje" (SM-2) ou "todos os cards", grade numerada e "ir para card N".
+- `html/flashcards.html` (só os cards aprovados em `flashcards_propostos.md`): fila embaralhada, modo "pendentes hoje" (SM-2) ou "todos os cards", grade numerada e "ir para card N".
 
 ---
 

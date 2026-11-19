@@ -1,84 +1,155 @@
-"""Gera flashcards com spaced repetition (SM-2) como HTML autocontido."""
+"""Flashcards (SM-2) em dois passos, com revisão humana no meio.
+
+    propor(llm, pasta)  -> <pasta>/flashcards_propostos.md   (o usuário aprova no Obsidian)
+    montar(pasta)       -> <pasta>/html/flashcards.html      (só os aprovados)
+
+As regras de qualidade vivem em prompts/flashcards_regras.md (fonte única, lida
+também pelo agente Claude criar-estudo). O formato da lista, o parser e o lint
+ficam em flashcards_lista.py, sem LLM.
+"""
 from __future__ import annotations
 import json
 import os
+import re
 from pathlib import Path
 
 from ..llm import LLMClient
+from . import flashcards_lista as lista
+
+_REGRAS = Path(__file__).resolve().parents[2] / "prompts" / "flashcards_regras.md"
+
+_ARQUIVOS_IGNORADOS = {"guia_de_estudos.md", lista.NOME_ARQUIVO}
+_TLDR_MAX = 1800        # caracteres do TL;DR de cada arquivo
+_MAPA_MAX = 6000        # caracteres do mapa da pasta
+_CONCEITOS_MAX = 4000   # caracteres do arquivo de conceitos para dominar
+_ALVO_POR_CHAMADA = (30, 50)
 
 
-def generate(llm: LLMClient, pasta: str) -> str | None:
+def regras() -> str:
+    if not _REGRAS.exists():
+        raise FileNotFoundError(f"Regras dos flashcards ausentes: {_REGRAS}")
+    texto = _REGRAS.read_text(encoding="utf-8")
+    return re.sub(r"\A\s*<!--.*?-->\s*", "", texto, count=1, flags=re.S)
+
+
+# ── Passo 1: propor ───────────────────────────────────────────────────────────
+
+def propor(llm: LLMClient, pasta: str, regerar: bool = False) -> lista.Relatorio | None:
+    """Gera a lista de cards propostos pelo LLM do config e grava flashcards_propostos.md.
+
+    Retorna o relatório do lint, ou None se a pasta não tem conteúdo suficiente.
     """
-    Lê os .md da pasta, gera pares Q&A via LLM e escreve html/flashcards.html.
-    Retorna o caminho do arquivo gerado ou None se não há conteúdo suficiente.
-    """
-    md_files = _collect_md_files(pasta)
-    if not md_files:
+    material = _coletar_material(pasta)
+    if not material["arquivos"]:
         return None
 
-    all_cards: list[dict] = []
-    for md_path in md_files:
-        content = Path(md_path).read_text(encoding="utf-8")
-        if len(content.strip()) < 100:
+    prompt = _montar_prompt(material)
+    resposta = llm.chat_json(
+        messages=[{"role": "user", "content": prompt}],
+        system=regras(),
+        max_tokens=8192,
+    )  # erro de LLM/JSON propaga: o chamador mostra o motivo real em vez de engolir
+    if not isinstance(resposta, list):
+        raise ValueError("o LLM não devolveu uma lista JSON de flashcards")
+
+    cards = [
+        lista.Card(
+            pergunta=str(c.get("pergunta", "")).strip(),
+            resposta=str(c.get("resposta", "")).strip(),
+            fonte=str(c.get("fonte", "")).strip(),
+            secao=str(c.get("secao", "")).strip(),
+            termos=_ler_termos(c.get("termos")),
+        )
+        for c in resposta if isinstance(c, dict)
+    ]
+    return lista.gravar_lista(pasta, cards, titulo=Path(pasta).name, regerar=regerar)
+
+
+def _ler_termos(bruto) -> list[lista.Termo]:
+    """Subcards (termo + explicação) vindos do JSON do LLM; entradas malformadas são ignoradas."""
+    if not isinstance(bruto, list):
+        return []
+    termos = []
+    for t in bruto:
+        if isinstance(t, dict) and str(t.get("termo", "")).strip() and str(t.get("explicacao", "")).strip():
+            termos.append(lista.Termo(str(t["termo"]).strip().strip("`"), str(t["explicacao"]).strip()))
+    return termos
+
+
+def _coletar_material(pasta: str) -> dict:
+    raiz = Path(pasta)
+    mapa = ""
+    for nome in ("00_contexto_e_mapa.md",):
+        for cand in sorted(raiz.rglob(nome)):
+            mapa += cand.read_text(encoding="utf-8")[:_MAPA_MAX] + "\n\n"
+    conceitos = ""
+    for cand in sorted(raiz.rglob("*conceitos_para_dominar*.md")):
+        conceitos += cand.read_text(encoding="utf-8")[:_CONCEITOS_MAX] + "\n\n"
+
+    arquivos = []
+    for md in sorted(raiz.rglob("*.md")):
+        if md.name in _ARQUIVOS_IGNORADOS or "transcripts" in md.parts or md.name.startswith("00_contexto"):
             continue
-        cards = _generate_cards_for_file(llm, md_path, content)
-        all_cards.extend(cards)
+        if any(part.startswith(".") for part in md.relative_to(raiz).parts):
+            continue
+        texto = md.read_text(encoding="utf-8")
+        if len(texto.strip()) < 100:
+            continue
+        arquivos.append({
+            "nome": md.stem,
+            "secao": md.parent.name if md.parent != raiz else raiz.name,
+            "tldr": _tldr(texto),
+        })
+    return {"mapa": mapa.strip(), "conceitos": conceitos.strip(), "arquivos": arquivos}
 
-    if not all_cards:
-        return None
 
+def _tldr(texto: str) -> str:
+    m = re.search(r"^## TL;DR\s*\n(.*?)(?=^## |\Z)", texto, re.S | re.M)
+    trecho = m.group(1) if m else texto
+    return trecho.strip()[:_TLDR_MAX]
+
+
+def _montar_prompt(material: dict) -> str:
+    lo, hi = _ALVO_POR_CHAMADA
+    partes = [f"Crie de {lo} a {hi} flashcards seguindo as regras do sistema."]
+    if material["mapa"]:
+        partes.append("## Mapa da pasta (fluxo principal)\n" + material["mapa"])
+    if material["conceitos"]:
+        partes.append("## Conceitos para dominar\n" + material["conceitos"])
+    partes.append("## TL;DR de cada arquivo")
+    for a in material["arquivos"]:
+        partes.append(f"### {a['nome']} (pasta: {a['secao']})\n{a['tldr']}")
+    partes.append(
+        "Responda só com um array JSON, sem texto extra, neste formato:\n"
+        '[{"pergunta": "...", "resposta": "...", "fonte": "[[nome_do_arquivo]]", "secao": "nome da pasta", '
+        '"termos": [{"termo": "símbolo ou termo como aparece no card", "explicacao": "o que é, em 1 a 3 frases"}]}]'
+        "\nCada símbolo de equação e cada termo técnico usado na pergunta ou na resposta precisa de um item em \"termos\"."
+    )
+    return "\n\n".join(partes)
+
+
+# ── Passo 2: montar ───────────────────────────────────────────────────────────
+
+def montar(pasta: str, aprovar_todos: bool = False) -> str:
+    """Lê flashcards_propostos.md e escreve html/flashcards.html só com os aprovados.
+
+    Levanta FileNotFoundError se não há lista e ValueError se nada foi aprovado.
+    """
+    if not (Path(pasta) / lista.NOME_ARQUIVO).exists():
+        raise FileNotFoundError(
+            f"Não há {lista.NOME_ARQUIVO} em {pasta}. Rode antes o modo flashcards-propor."
+        )
+    cards = lista.aprovados(pasta, aprovar_todos=aprovar_todos)
+    if not cards:
+        raise ValueError(
+            f"Nenhum card aprovado em {lista.NOME_ARQUIVO}. Marque [x] nos que quiser, "
+            "ou use --aprovar-todos."
+        )
     html_dir = os.path.join(pasta, "html")
     Path(html_dir).mkdir(parents=True, exist_ok=True)
     out_path = os.path.join(html_dir, "flashcards.html")
-    Path(out_path).write_text(_render_html(all_cards), encoding="utf-8")
+    Path(out_path).write_text(_render_html([c.como_dict() for c in cards]), encoding="utf-8")
     return out_path
-
-
-# ── Coleta e geração ───────────────────────────────────────────────────────────
-
-def _collect_md_files(pasta: str) -> list[str]:
-    skip = {"guia_de_estudos.md"}
-    result = []
-    for md in sorted(Path(pasta).rglob("*.md")):
-        if md.name in skip or "transcripts" in md.parts:
-            continue
-        result.append(str(md))
-    return result[:15]  # limitar tokens
-
-
-def _generate_cards_for_file(llm: LLMClient, md_path: str, content: str) -> list[dict]:
-    file_name = Path(md_path).stem
-    prompt = f"""Leia o conteúdo abaixo e crie de 3 a 6 flashcards de estudo.
-
-Arquivo: {file_name}
-
-Conteúdo:
-{content[:3000]}
-
-Responda com JSON válido neste formato exato (array, sem texto extra):
-[
-  {{
-    "pergunta": "Qual é o conceito de X?",
-    "resposta": "Resposta completa e didática.",
-    "fonte": "{file_name}"
-  }}
-]
-
-Crie flashcards que testem compreensão real: conceituais, de aplicação e de comparação."""
-
-    try:
-        result = llm.chat_json(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2048,
-        )
-        if isinstance(result, list):
-            return [
-                c for c in result
-                if isinstance(c, dict) and "pergunta" in c and "resposta" in c
-            ]
-    except Exception:
-        pass
-    return []
 
 
 # ── Renderização HTML ──────────────────────────────────────────────────────────
@@ -113,7 +184,28 @@ _TEMPLATE = """<!DOCTYPE html>
     body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--base); color:var(--text); min-height:100vh; display:flex; flex-direction:column; align-items:center; }
     header { width:100%; background:var(--mantle); padding:14px 28px; border-bottom:2px solid var(--purple); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     header h1 { color:var(--purple); font-size:1.2rem; }
-    .container { width:100%; max-width:680px; padding:24px 16px 32px; }
+    .layout { width:100%; max-width:1500px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,760px) minmax(0,1fr); gap:12px; padding:0 16px; }
+    .container { grid-column:2; grid-row:1; width:100%; padding:24px 0 32px; }
+    .side { align-self:center; display:flex; flex-direction:column; gap:8px; padding-top:40px; }
+    .side-left { grid-column:1; grid-row:1; align-items:flex-end; }
+    .side-right { grid-column:3; grid-row:1; align-items:flex-start; }
+    .chip { max-width:100%; padding:7px 12px; border:1px solid var(--surface1); background:var(--surface0); color:var(--teal); border-radius:999px; font-size:0.85rem; cursor:pointer; text-align:left; overflow-wrap:anywhere; transition:border-color .15s, background .15s; }
+    .chip:hover { border-color:var(--blue); }
+    .chip.active { background:var(--blue); color:var(--crust); border-color:var(--blue); font-weight:600; }
+    .scene-wrap { position:relative; }
+    .term-panel { position:absolute; z-index:20; left:5%; right:5%; top:16px; max-height:calc(100% - 52px); overflow-y:auto; background:var(--crust); border:2px solid var(--blue); border-radius:14px; padding:18px 20px; box-shadow:0 12px 32px rgba(0,0,0,.55); }
+    .term-panel .term-title { color:var(--blue); font-weight:700; font-size:1.05rem; margin-bottom:8px; overflow-wrap:anywhere; }
+    .term-panel .term-text { font-size:0.95rem; line-height:1.6; white-space:pre-wrap; }
+    .term-panel .term-close { position:absolute; top:8px; right:12px; background:none; border:none; color:var(--overlay0); font-size:1.2rem; cursor:pointer; }
+    .term-panel .term-close:hover { color:var(--text); }
+    @media (max-width:1000px) {
+      .layout { grid-template-columns:minmax(0,1fr); }
+      .container { grid-column:1; grid-row:1; }
+      .side { padding-top:0; flex-direction:row; flex-wrap:wrap; justify-content:center; align-items:center; }
+      .side-left { grid-column:1; grid-row:2; }
+      .side-right { grid-column:1; grid-row:3; }
+      .side:empty { display:none; }
+    }
     .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; font-size:0.82rem; color:var(--subtext); }
     .toolbar input { width:70px; background:var(--mantle); border:1px solid var(--surface1); color:var(--text); border-radius:6px; padding:6px 8px; font-size:0.85rem; }
     .toolbar select { background:var(--mantle); border:1px solid var(--surface1); color:var(--text); border-radius:6px; padding:6px 8px; font-size:0.82rem; }
@@ -127,16 +219,16 @@ _TEMPLATE = """<!DOCTYPE html>
     .progress-fill { height:100%; background:var(--purple); border-radius:8px; transition:width 0.3s; }
     .stats { display:flex; gap:20px; margin-bottom:20px; font-size:0.85rem; color:var(--subtext); flex-wrap:wrap; }
     .stats span { color:var(--text); font-weight:600; }
-    .scene { width:100%; height:320px; perspective:1000px; cursor:pointer; margin-bottom:20px; }
+    .scene { width:100%; height:460px; perspective:1000px; cursor:pointer; margin-bottom:20px; }
     .card-inner { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform 0.5s; }
     .card-inner.flipped { transform:rotateY(180deg); }
-    .card-face { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:16px; padding:32px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; overflow-y:auto; }
+    .card-face { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:16px; padding:32px; display:flex; flex-direction:column; justify-content:safe center; align-items:center; text-align:center; overflow-y:auto; }
     .card-front { background:var(--surface0); border:2px solid var(--purple); }
     .card-back { background:var(--mantle); border:2px solid var(--teal); transform:rotateY(180deg); }
     .card-face .label { font-size:0.75rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:16px; }
     .card-front .label { color:var(--purple); }
     .card-back .label { color:var(--teal); }
-    .card-face .text { font-size:1.05rem; line-height:1.65; white-space:pre-wrap; }
+    .card-face .text { font-size:1rem; line-height:1.6; text-align:left; white-space:pre-wrap; }
     .card-face .source { position:absolute; bottom:12px; right:16px; font-size:0.72rem; color:var(--overlay0); }
     .hint { text-align:center; color:var(--overlay0); font-size:0.82rem; margin-bottom:20px; }
     .buttons { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
@@ -162,6 +254,8 @@ _TEMPLATE = """<!DOCTYPE html>
     <h1>🃏 Flashcards — Spaced Repetition</h1>
     <button class="btn-sm" onclick="startSession(mode)" title="Nova ordem aleatória para a sessão">🔀 Reembaralhar</button>
   </header>
+  <div class="layout">
+  <aside class="side side-left" id="side-left" aria-label="Termos e símbolos"></aside>
   <div class="container">
     <div class="toolbar">
       <select id="mode" onchange="startSession(this.value)">
@@ -181,6 +275,7 @@ _TEMPLATE = """<!DOCTYPE html>
         <div>Avaliados na sessão: <span id="rated">0</span></div>
         <div>Pendentes hoje: <span id="due-count">0</span></div>
       </div>
+      <div class="scene-wrap" id="scene-wrap">
       <div class="scene" id="scene" onclick="flipCard()">
         <div class="card-inner" id="card-inner">
           <div class="card-face card-front">
@@ -193,6 +288,12 @@ _TEMPLATE = """<!DOCTYPE html>
             <div class="text" id="a-text"></div>
           </div>
         </div>
+      </div>
+      <div class="term-panel" id="term-panel" role="dialog" aria-live="polite" hidden>
+        <button class="term-close" onclick="closePanel()" title="Fechar (Esc)">×</button>
+        <div class="term-title" id="term-title"></div>
+        <div class="term-text" id="term-text"></div>
+      </div>
       </div>
       <p class="hint" id="flip-hint">Clique no card para ver a resposta</p>
       <div class="buttons review-btns" id="review-btns">
@@ -212,6 +313,8 @@ _TEMPLATE = """<!DOCTYPE html>
       <p id="done-msg">Você revisou todos os cards de hoje.</p>
       <button class="btn btn-restart" onclick="startSession('all')">Estudar todos os cards</button>
     </div>
+  </div>
+  <aside class="side side-right" id="side-right" aria-label="Termos e símbolos"></aside>
   </div>
 
   <script>
@@ -299,6 +402,64 @@ _TEMPLATE = """<!DOCTYPE html>
       render();
     }
 
+    // ── Subcards: botões laterais com a explicação de termos e símbolos ──────────
+    const norm = s => String(s).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();
+    // Termos de 1 ou 2 letras (m, β, v̂) só casam como palavra inteira; "m" não pode casar em "como".
+    function contem(x, t) {
+      if (t.length >= 3) return x.includes(t);
+      let i = x.indexOf(t);
+      while (i !== -1) {
+        const antes = i > 0 ? x[i - 1] : ' ', depois = x[i + t.length] || ' ';
+        if (!/[\\p{L}\\p{N}]/u.test(antes) && !/\\p{L}/u.test(depois)) return true;
+        i = x.indexOf(t, i + 1);
+      }
+      return false;
+    }
+    function aparece(termo, texto) {
+      const t = norm(termo), x = norm(texto);
+      if (contem(x, t)) return true;
+      const base = t.split(/[_\\s(^]/)[0];
+      return base.length > 0 && contem(x, base);
+    }
+    // Face da pergunta: termos que aparecem nela. Face da resposta: os que aparecem na
+    // resposta, mais os que não aparecem na pergunta (para não vazar termo só da resposta).
+    function termosDaFace(card, face) {
+      const ts = card.termos || [];
+      return ts.filter(t => {
+        const naP = aparece(t.termo, card.pergunta), naR = aparece(t.termo, card.resposta);
+        return face === 'q' ? naP : (naR || !naP);
+      });
+    }
+    function closePanel() {
+      document.getElementById('term-panel').hidden = true;
+      document.querySelectorAll('.chip.active').forEach(b => b.classList.remove('active'));
+    }
+    function openTerm(btn, t) {
+      if (btn.classList.contains('active')) { closePanel(); return; }
+      closePanel();
+      btn.classList.add('active');
+      document.getElementById('term-title').textContent = t.termo;
+      document.getElementById('term-text').textContent = t.explicacao;
+      document.getElementById('term-panel').hidden = false;
+    }
+    function renderChips(face) {
+      closePanel();
+      const left = document.getElementById('side-left'), right = document.getElementById('side-right');
+      left.textContent = ''; right.textContent = '';
+      termosDaFace(ALL_CARDS[queue[pos]], face).forEach((t, i) => {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = t.termo;
+        b.title = 'Ver o que é';
+        b.onclick = e => { e.stopPropagation(); openTerm(b, t); };
+        (i % 2 === 0 ? left : right).appendChild(b);
+      });
+    }
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#term-panel') && !e.target.closest('.chip')) closePanel();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
     function renderGrid() {
       document.getElementById('grid').innerHTML = queue.map((_, i) => {
         let cls = rated.has(i) ? 'done' : '';
@@ -324,11 +485,13 @@ _TEMPLATE = """<!DOCTYPE html>
       document.getElementById('card-inner').classList.remove('flipped');
       document.getElementById('flip-hint').style.display = 'block';
       document.getElementById('review-btns').style.display = 'none';
+      renderChips('q');
     }
 
     function flipCard() {
       if (flipped) return;
       flipped = true;
+      renderChips('a');
       document.getElementById('card-inner').classList.add('flipped');
       document.getElementById('flip-hint').style.display = 'none';
       document.getElementById('review-btns').style.display = 'flex';
