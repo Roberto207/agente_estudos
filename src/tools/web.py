@@ -12,13 +12,56 @@ _HEADERS = {
 
 
 def fetch_url(url: str, timeout: int = 30) -> str:
-    """Faz download de uma URL e retorna o texto limpo."""
+    """Faz download de uma URL e retorna o texto limpo.
+
+    PDFs (ex.: arxiv.org/pdf/...) são convertidos para texto completo, com
+    tabelas e notas de rodapé — necessário para o modo artigo.
+    """
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=timeout)
         resp.raise_for_status()
+        if _is_pdf(resp, url):
+            return _pdf_para_texto(resp.content)
         return _extract_text(resp.text)
     except Exception as exc:
         return f"[Erro ao buscar {url}: {exc}]"
+
+
+def _is_pdf(resp, url: str) -> bool:
+    ctype = (resp.headers.get("Content-Type") or "").lower()
+    return (
+        "application/pdf" in ctype
+        or url.lower().split("?")[0].endswith(".pdf")
+        or resp.content[:5] == b"%PDF-"
+    )
+
+
+def _pdf_para_texto(data: bytes, limite: int = 200_000) -> str:
+    """Extrai o texto completo de um PDF (pdftotext, ou pypdf como alternativa)."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    if shutil.which("pdftotext"):
+        with tempfile.TemporaryDirectory() as d:
+            pdf = f"{d}/doc.pdf"
+            with open(pdf, "wb") as fh:
+                fh.write(data)
+            out = subprocess.run(
+                ["pdftotext", "-layout", pdf, "-"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if out.returncode == 0 and out.stdout.strip():
+                return out.stdout[:limite]
+    try:
+        import io
+        from pypdf import PdfReader
+        texto = "\n".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages)
+        if texto.strip():
+            return texto[:limite]
+    except ImportError:
+        pass
+    return "[Erro: não foi possível extrair texto do PDF (instale poppler-utils/pdftotext ou pypdf)]"
 
 
 def web_search(query: str, max_results: int = 5) -> list[dict]:
