@@ -30,6 +30,8 @@ A saída é JSON. O áudio (estágio 2) não é feito aqui.
 **8.3 — Episódios, um de cada vez, em ordem crescente.**
 Rode `status` de novo (depois do 8.2, ele já lista os episódios). Gere só os que têm `"existe": false`, ou os que o usuário pediu. A ordem importa: as entradas do episódio N resumem os roteiros já escritos dos anteriores.
 
+**Limite: no máximo 5 episódios por execução.** Isso vale também quando o pedido é "a série inteira" ou uma lista com mais de 5. Gere os 5 primeiros da fila, em ordem crescente, e pare. No relatório (8.4), diga quais episódios faltam e que a próxima execução deve começar numa sessão nova, retomando pelo `status`. Reescritas do mesmo episódio não contam como episódio novo. Por quê: cada chamada sua relê todo o seu contexto, e ele cresce cerca de mil tokens por chamada (umas 8 chamadas por episódio). Medido em 11/10/2026, uma série de 5 numa execução custa uns 0,75 M tokens por episódio; uma de 10, uns 0,9 M; uma de 15, uns 1,06 M. De 1 a 5 episódios por execução, o custo por episódio é praticamente o mesmo.
+
 **Retomar depois de uma interrupção:** não limpe nada. O `status` mostra a série como válida e os episódios que faltam. Arquivos em `podcast/.agente/` são de trabalho e são sobrescritos. Um roteiro que existe mas não passou pelo `finalizar` (o frontmatter só tem `episodio:`) deve ser refeito a partir do passo 1.
 
 Para cada episódio N:
@@ -59,7 +61,7 @@ Para cada episódio N:
    - `--reescritas` é o **total** de reescritas, igual ao caminho Python: a soma de `reescritas_lint` de cada `RESULTADO_EPISODIO` mais 1 se houve a reescrita guiada pelo crítico.
    - Cada `finalizar` acrescenta uma entrada própria em `relatorio.json`, uma por episódio. Se o crítico falhou ou não gravou o JSON, use `--critica-indisponivel` em vez de `--critica`. O código grava o frontmatter (versões dos prompts, lint, veredito, pontes) e a linha do `podcast/relatorio.json`.
 
-**8.4 — Relatório.** Mostre ao usuário uma tabela com: episódio, título, palavras, duração estimada, lint, crítica e reescritas. Liste também os problemas que sobraram nos episódios reprovados. Não cole os roteiros.
+**8.4 — Relatório.** Mostre ao usuário uma tabela com: episódio, título, palavras, duração estimada, lint, crítica e reescritas. Liste também os problemas que sobraram nos episódios reprovados e, se o limite de 5 interrompeu a série, os episódios que faltam. Não cole os roteiros.
 
 **Áudio (estágio 2) não é feito por agente.** Ao fim do 8.4, informe ao usuário como gerar os MP3:
 - local, sem GPU: `python main.py --mode podcast-audio --pasta "<pasta>"` (motor `edge`);
